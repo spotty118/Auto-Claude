@@ -65,7 +65,7 @@
         {
           "id": "cleanup",
           "description": "Final cleanup and documentation",
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "verify-complete",
