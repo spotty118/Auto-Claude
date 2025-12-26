@@ -34,6 +34,10 @@ from .formatters import (
 )
 from .state import ReviewState
 
+# Timeout constants
+WHICH_TIMEOUT = 5  # Quick check for editor availability
+EDITOR_TIMEOUT = 3600  # 1 hour for user to edit files
+
 
 class ReviewChoice(Enum):
     """User choices during review checkpoint."""
@@ -145,10 +149,11 @@ def open_file_in_editor(file_path: Path) -> bool:
                     ["which", candidate],
                     capture_output=True,
                     check=True,
+                    timeout=WHICH_TIMEOUT,
                 )
                 editor = candidate
                 break
-            except subprocess.CalledProcessError:
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 continue
 
     if not editor:
@@ -162,10 +167,21 @@ def open_file_in_editor(file_path: Path) -> bool:
     try:
         # Use --wait flag for VS Code to block until closed
         if editor in ("code", "code-insiders"):
-            subprocess.run([editor, "--wait", str(file_path)], check=True)
+            subprocess.run(
+                [editor, "--wait", str(file_path)],
+                check=True,
+                timeout=EDITOR_TIMEOUT,
+            )
         else:
-            subprocess.run([editor, str(file_path)], check=True)
+            subprocess.run(
+                [editor, str(file_path)],
+                check=True,
+                timeout=EDITOR_TIMEOUT,
+            )
         return True
+    except subprocess.TimeoutExpired:
+        print_status("Editor session timed out", "error")
+        return False
     except subprocess.CalledProcessError as e:
         print_status(f"Editor failed: {e}", "error")
         return False

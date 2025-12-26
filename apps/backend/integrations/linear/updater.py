@@ -173,7 +173,7 @@ async def _run_linear_agent(prompt: str) -> str | None:
 
             return response_text
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print(f"Linear update failed: {e}")
         return None
 

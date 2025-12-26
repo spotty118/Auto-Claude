@@ -120,6 +120,7 @@ async def get_graphiti_context(
         memory = GraphitiMemory(spec_dir, project_dir)
 
         if not memory.is_enabled:
+            await memory.close()  # Ensure cleanup on early return
             if is_debug_enabled():
                 debug_warning("memory", "GraphitiMemory.is_enabled=False")
             return None
@@ -198,7 +199,7 @@ async def get_graphiti_context(
         if is_debug_enabled():
             debug_warning("memory", "Graphiti packages not installed")
         return None
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.warning(f"Failed to get Graphiti context: {e}")
         return None
 
@@ -338,6 +339,7 @@ async def save_session_memory(
                             "memory", "Graphiti save returned False, using FALLBACK"
                         )
             else:
+                await memory.close()  # Ensure cleanup when not enabled
                 logger.warning(
                     "Graphiti memory not enabled, falling back to file-based"
                 )
@@ -350,7 +352,7 @@ async def save_session_memory(
             logger.debug("Graphiti packages not installed, falling back to file-based")
             if is_debug_enabled():
                 debug_warning("memory", "Graphiti packages not installed", error=str(e))
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Graphiti save failed: {e}, falling back to file-based")
             if is_debug_enabled():
                 debug_error("memory", "Graphiti save failed", error=str(e))
@@ -386,7 +388,7 @@ async def save_session_memory(
                 subtasks_saved=len(subtasks_completed),
             )
         return True, "file"
-    except Exception as e:
+    except OSError as e:
         logger.error(f"File-based memory save also failed: {e}")
         if is_debug_enabled():
             debug_error("memory", "File-based memory save FAILED", error=str(e))

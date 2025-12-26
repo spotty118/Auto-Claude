@@ -205,6 +205,14 @@ export interface TaskMetadata {
   uiuxCategory?: string;
   codeQualitySeverity?: 'suggestion' | 'minor' | 'major' | 'critical';
 
+  // Bug finder specific
+  bugPattern?: string;
+  triggerCondition?: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
+  reproSteps?: string[];
+  suggestedFix?: string;
+
   // Image attachments (screenshots, mockups, diagrams)
   attachedImages?: ImageAttachment[];
 

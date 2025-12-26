@@ -6,6 +6,7 @@ Utilities for reading and parsing project configuration files
 (package.json, pyproject.toml, composer.json, etc.).
 """
 
+from __future__ import annotations
 import json
 import sys
 from pathlib import Path
@@ -50,7 +51,7 @@ class ConfigParser:
                 return tomllib.load(f)
         except FileNotFoundError:
             return None
-        except Exception as e:
+        except (OSError, ValueError) as e:
             # Handle both tomllib.TOMLDecodeError and tomli.TOMLDecodeError
             if "TOMLDecodeError" in type(e).__name__:
                 return None

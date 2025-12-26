@@ -16,7 +16,8 @@ export type IdeationType =
   | 'documentation_gaps'
   | 'security_hardening'
   | 'performance_optimizations'
-  | 'code_quality';
+  | 'code_quality'
+  | 'bug_finder';
 export type IdeationStatus = 'draft' | 'selected' | 'converted' | 'dismissed' | 'archived';
 export type IdeationGenerationPhase = 'idle' | 'analyzing' | 'discovering' | 'generating' | 'finalizing' | 'complete' | 'error';
 
@@ -114,13 +115,29 @@ export interface CodeQualityIdea extends IdeaBase {
   prerequisites?: string[];  // Things that should be done first
 }
 
+export interface BugFinderIdea extends IdeaBase {
+  type: 'bug_finder';
+  category: 'logic_error' | 'race_condition' | 'error_handling' | 'edge_case' | 'resource_leak' | 'integration' | 'null_safety' | 'type_safety';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  affectedFiles: string[];  // Files where the bug exists
+  bugPattern?: string;  // Known pattern name (TOCTOU, NPE, etc.)
+  triggerCondition: string;  // How to trigger the bug
+  expectedBehavior: string;  // What should happen
+  actualBehavior: string;  // What actually happens (buggy behavior)
+  reproSteps?: string[];  // Steps to reproduce
+  suggestedFix: string;  // How to fix the bug
+  confidence: 'low' | 'medium' | 'high' | 'confirmed';  // Confidence in the bug existence
+  testability?: string;  // How the bug can be verified/tested
+}
+
 export type Idea =
   | CodeImprovementIdea
   | UIUXImprovementIdea
   | DocumentationGapIdea
   | SecurityHardeningIdea
   | PerformanceOptimizationIdea
-  | CodeQualityIdea;
+  | CodeQualityIdea
+  | BugFinderIdea;
 
 export interface IdeationSession {
   id: string;

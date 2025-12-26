@@ -126,7 +126,7 @@ def fetch_ollama_api(base_url: str, endpoint: str, timeout: int = 5) -> dict | N
         return None
     except json.JSONDecodeError:
         return None
-    except Exception:
+    except OSError:
         return None
 
 
@@ -359,14 +359,26 @@ def cmd_pull_model(args) -> None:
         )
 
         output_lines = []
-        for line in iter(process.stdout.readline, ""):
-            line = line.strip()
-            if line:
-                output_lines.append(line)
-                # Print progress to stderr for streaming
-                print(line, file=sys.stderr, flush=True)
+        try:
+            for line in iter(process.stdout.readline, ""):
+                line = line.strip()
+                if line:
+                    output_lines.append(line)
+                    # Print progress to stderr for streaming
+                    print(line, file=sys.stderr, flush=True)
+        finally:
+            # BUGFIX: Always close stdout pipe to prevent file descriptor leak
+            if process.stdout:
+                process.stdout.close()
 
-        process.wait()
+        # Wait with timeout to prevent indefinite hangs
+        try:
+            process.wait(timeout=600)  # 10 minute timeout for model download
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            output_error("Model download timed out after 10 minutes")
+            return
 
         if process.returncode == 0:
             output_json(
@@ -384,8 +396,10 @@ def cmd_pull_model(args) -> None:
 
     except FileNotFoundError:
         output_error("Ollama CLI not found. Please install Ollama first.")
-    except Exception as e:
-        output_error(f"Failed to pull model: {str(e)}")
+    except subprocess.SubprocessError as e:
+        output_error(f"Subprocess error pulling model: {str(e)}")
+    except OSError as e:
+        output_error(f"OS error pulling model: {str(e)}")
 
 
 def main():

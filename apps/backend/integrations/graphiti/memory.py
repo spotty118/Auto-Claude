@@ -123,7 +123,7 @@ async def test_graphiti_connection() -> tuple[bool, str]:
     except ImportError as e:
         return False, f"Graphiti packages not installed: {e}"
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         return False, f"Connection failed: {e}"
 
 

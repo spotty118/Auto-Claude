@@ -54,6 +54,12 @@ def load_context(input_file: Path) -> dict:
 
     Returns:
         Context dictionary
+
+    Raises:
+        ValueError: If file cannot be read or contains invalid JSON
     """
-    with open(input_file) as f:
-        return json.load(f)
+    try:
+        with open(input_file) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise ValueError(f"Failed to load context from {input_file}: {e}") from e

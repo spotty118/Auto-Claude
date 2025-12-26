@@ -123,10 +123,10 @@ async def save_to_graphiti_async(
         await graphiti.close()
         return result
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.warning(f"Failed to save to Graphiti: {e}")
         try:
             await graphiti.close()
-        except Exception:
+        except (OSError, RuntimeError):
             pass
         return False

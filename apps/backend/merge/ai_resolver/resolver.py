@@ -226,7 +226,7 @@ class AIResolver:
                     tokens_used=context.estimated_tokens,
                 )
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error(f"AI call failed: {e}")
             return MergeResult(
                 decision=MergeDecision.FAILED,
@@ -395,7 +395,7 @@ class AIResolver:
                     tokens_used=total_tokens,
                 )
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error(f"Batch AI call failed: {e}")
             return MergeResult(
                 decision=MergeDecision.FAILED,

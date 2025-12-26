@@ -19,5 +19,5 @@ def emit_marker(marker_type: str, data: dict, enabled: bool = True) -> None:
     try:
         marker = f"__TASK_LOG_{marker_type.upper()}__:{json.dumps(data)}"
         print(marker, flush=True)
-    except Exception:
+    except (TypeError, ValueError, OSError):
         pass  # Don't let marker emission break logging

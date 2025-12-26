@@ -151,7 +151,7 @@ class ProjectAnalyzer:
                 "ideation_analyzer", f"Got {len(hints)} graph hints for {ideation_type}"
             )
             return hints
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             debug_warning(
                 "ideation_analyzer", f"Graph hints failed for {ideation_type}: {e}"
             )

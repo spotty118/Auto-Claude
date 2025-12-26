@@ -53,8 +53,11 @@ class ServiceContextGenerator:
         """Load project index from file (.auto-claude is the installed instance)."""
         index_file = self.project_dir / ".auto-claude" / "project_index.json"
         if index_file.exists():
-            with open(index_file) as f:
-                return json.load(f)
+            try:
+                with open(index_file) as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                pass  # Fall through to return default
         return {"services": {}}
 
     def generate_for_service(self, service_name: str) -> ServiceContext:
@@ -398,7 +401,7 @@ def generate_all_contexts(project_dir: Path, project_index: dict | None = None):
         try:
             path = generator.generate_and_save(service_name)
             generated.append((service_name, str(path)))
-        except Exception as e:
+        except (OSError, KeyError, TypeError) as e:
             print(f"Failed to generate context for {service_name}: {e}")
 
     return generated
@@ -446,8 +449,12 @@ def main():
     # Load project index if specified
     project_index = None
     if args.index and args.index.exists():
-        with open(args.index) as f:
-            project_index = json.load(f)
+        try:
+            with open(args.index) as f:
+                project_index = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            print(f"Warning: Could not load project index from {args.index}")
+            project_index = None
 
     if args.all:
         generated = generate_all_contexts(args.project_dir, project_index)

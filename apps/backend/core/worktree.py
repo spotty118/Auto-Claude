@@ -12,15 +12,25 @@ This allows:
 2. Each spec's changes are isolated
 3. Branches persist until explicitly merged
 4. Clear 1:1:1 mapping: spec → worktree → branch
+
+Security Notes:
+- All subprocess calls use timeouts to prevent hang attacks (DoS)
+- Default timeout: 60s for simple git commands, 300s for large operations
+- File-based MergeLock prevents concurrent merge operations across processes
 """
 
-import asyncio
 import os
 import re
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from workspace.models import MergeLock, MergeLockError
+
+# Subprocess timeouts (seconds) - prevents hang attacks and resource exhaustion
+GIT_TIMEOUT_SHORT = 60  # Simple git commands (status, add, rev-parse)
+GIT_TIMEOUT_LONG = 300  # Complex operations (worktree add, merge, fetch)
 
 
 class WorktreeError(Exception):
@@ -56,7 +66,6 @@ class WorktreeManager:
         self.project_dir = project_dir
         self.base_branch = base_branch or self._detect_base_branch()
         self.worktrees_dir = project_dir / ".worktrees"
-        self._merge_lock = asyncio.Lock()
 
     def _detect_base_branch(self) -> str:
         """
@@ -81,6 +90,7 @@ class WorktreeManager:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                timeout=GIT_TIMEOUT_SHORT,
             )
             if result.returncode == 0:
                 return env_branch
@@ -98,6 +108,7 @@ class WorktreeManager:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                timeout=GIT_TIMEOUT_SHORT,
             )
             if result.returncode == 0:
                 return branch
@@ -118,15 +129,31 @@ class WorktreeManager:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=GIT_TIMEOUT_SHORT,
         )
         if result.returncode != 0:
             raise WorktreeError(f"Failed to get current branch: {result.stderr}")
         return result.stdout.strip()
 
     def _run_git(
-        self, args: list[str], cwd: Path | None = None
+        self, args: list[str], cwd: Path | None = None, timeout: int | None = None
     ) -> subprocess.CompletedProcess:
-        """Run a git command and return the result."""
+        """
+        Run a git command and return the result.
+
+        Args:
+            args: Git command arguments (without 'git')
+            cwd: Working directory (defaults to project_dir)
+            timeout: Command timeout in seconds (defaults to GIT_TIMEOUT_SHORT)
+
+        Returns:
+            CompletedProcess with stdout/stderr
+
+        Note: All git commands have timeouts to prevent hang attacks (DoS).
+        Use timeout=GIT_TIMEOUT_LONG for operations on large repos.
+        """
+        if timeout is None:
+            timeout = GIT_TIMEOUT_SHORT
         return subprocess.run(
             ["git"] + args,
             cwd=cwd or self.project_dir,
@@ -134,6 +161,7 @@ class WorktreeManager:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=timeout,
         )
 
     def _unstage_gitignored_files(self) -> None:
@@ -165,6 +193,7 @@ class WorktreeManager:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=GIT_TIMEOUT_SHORT,
         )
 
         if result.stdout.strip():
@@ -322,14 +351,18 @@ class WorktreeManager:
 
         # Remove existing if present (from crashed previous run)
         if worktree_path.exists():
-            self._run_git(["worktree", "remove", "--force", str(worktree_path)])
+            self._run_git(
+                ["worktree", "remove", "--force", str(worktree_path)],
+                timeout=GIT_TIMEOUT_LONG,
+            )
 
         # Delete branch if it exists (from previous attempt)
         self._run_git(["branch", "-D", branch_name])
 
         # Create worktree with new branch from base
         result = self._run_git(
-            ["worktree", "add", "-b", branch_name, str(worktree_path), self.base_branch]
+            ["worktree", "add", "-b", branch_name, str(worktree_path), self.base_branch],
+            timeout=GIT_TIMEOUT_LONG,
         )
 
         if result.returncode != 0:
@@ -377,7 +410,8 @@ class WorktreeManager:
 
         if worktree_path.exists():
             result = self._run_git(
-                ["worktree", "remove", "--force", str(worktree_path)]
+                ["worktree", "remove", "--force", str(worktree_path)],
+                timeout=GIT_TIMEOUT_LONG,
             )
             if result.returncode == 0:
                 print(f"Removed worktree: {worktree_path.name}")
@@ -397,6 +431,10 @@ class WorktreeManager:
         """
         Merge a spec's worktree branch back to base branch.
 
+        Uses file-based MergeLock to prevent concurrent merge operations
+        which could corrupt the git state. The lock is project-wide and
+        works across processes.
+
         Args:
             spec_name: The spec folder name
             delete_after: Whether to remove worktree and branch after merge
@@ -404,51 +442,56 @@ class WorktreeManager:
 
         Returns:
             True if merge succeeded
+        
+        Raises:
+            MergeLockError: If merge lock cannot be acquired within timeout
         """
         info = self.get_worktree_info(spec_name)
         if not info:
             print(f"No worktree found for spec: {spec_name}")
             return False
 
-        if no_commit:
-            print(
-                f"Merging {info.branch} into {self.base_branch} (staged, not committed)..."
-            )
-        else:
-            print(f"Merging {info.branch} into {self.base_branch}...")
+        # Use file-based lock to prevent concurrent merges (cross-process safe)
+        with MergeLock(self.project_dir, spec_name):
+            if no_commit:
+                print(
+                    f"Merging {info.branch} into {self.base_branch} (staged, not committed)..."
+                )
+            else:
+                print(f"Merging {info.branch} into {self.base_branch}...")
 
-        # Switch to base branch in main project
-        result = self._run_git(["checkout", self.base_branch])
-        if result.returncode != 0:
-            print(f"Error: Could not checkout base branch: {result.stderr}")
-            return False
+            # Switch to base branch in main project
+            result = self._run_git(["checkout", self.base_branch])
+            if result.returncode != 0:
+                print(f"Error: Could not checkout base branch: {result.stderr}")
+                return False
 
-        # Merge the spec branch
-        merge_args = ["merge", "--no-ff", info.branch]
-        if no_commit:
-            # --no-commit stages the merge but doesn't create the commit
-            merge_args.append("--no-commit")
-        else:
-            merge_args.extend(["-m", f"auto-claude: Merge {info.branch}"])
+            # Merge the spec branch
+            merge_args = ["merge", "--no-ff", info.branch]
+            if no_commit:
+                # --no-commit stages the merge but doesn't create the commit
+                merge_args.append("--no-commit")
+            else:
+                merge_args.extend(["-m", f"auto-claude: Merge {info.branch}"])
 
-        result = self._run_git(merge_args)
+            result = self._run_git(merge_args, timeout=GIT_TIMEOUT_LONG)
 
-        if result.returncode != 0:
-            print("Merge conflict! Aborting merge...")
-            self._run_git(["merge", "--abort"])
-            return False
+            if result.returncode != 0:
+                print("Merge conflict! Aborting merge...")
+                self._run_git(["merge", "--abort"], timeout=GIT_TIMEOUT_LONG)
+                return False
 
-        if no_commit:
-            # Unstage any files that are gitignored in the main branch
-            # These get staged during merge because they exist in the worktree branch
-            self._unstage_gitignored_files()
-            print(
-                f"Changes from {info.branch} are now staged in your working directory."
-            )
-            print("Review the changes, then commit when ready:")
-            print("  git commit -m 'your commit message'")
-        else:
-            print(f"Successfully merged {info.branch}")
+            if no_commit:
+                # Unstage any files that are gitignored in the main branch
+                # These get staged during merge because they exist in the worktree branch
+                self._unstage_gitignored_files()
+                print(
+                    f"Changes from {info.branch} are now staged in your working directory."
+                )
+                print("Review the changes, then commit when ready:")
+                print("  git commit -m 'your commit message'")
+            else:
+                print(f"Successfully merged {info.branch}")
 
         if delete_after:
             self.remove_worktree(spec_name, delete_branch=True)

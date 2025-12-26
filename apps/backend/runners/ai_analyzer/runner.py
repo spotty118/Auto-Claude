@@ -136,7 +136,7 @@ class AIAnalyzerRunner:
                 score = result.get("score", 0)
                 print(f"   ✓ Completed in {duration:.1f}s (score: {score}/100)")
 
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 print(f"   ✗ Error: {e}")
                 insights[analyzer_name] = {"error": str(e)}
 

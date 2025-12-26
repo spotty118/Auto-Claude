@@ -19,7 +19,14 @@ Public API is exported via workspace/__init__.py for backward compatibility.
 
 import subprocess
 from pathlib import Path
+import asyncio
+import logging
+import os
 
+from security.path_validators import (
+    GIT_SUBPROCESS_TIMEOUT,
+    validate_path_within_base,
+)
 from ui import (
     Icons,
     bold,
@@ -180,17 +187,21 @@ def merge_existing_build(
     # Detect current branch - this is where user wants changes merged
     # Normal workflow: user is on their feature branch (e.g., version/2.5.5)
     # and wants to merge the spec changes into it, then PR to main
-    current_branch_result = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-    )
-    current_branch = (
-        current_branch_result.stdout.strip()
-        if current_branch_result.returncode == 0
-        else None
-    )
+    try:
+        current_branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
+        )
+        current_branch = (
+            current_branch_result.stdout.strip()
+            if current_branch_result.returncode == 0
+            else None
+        )
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        current_branch = None
 
     spec_branch = f"auto-claude/{spec_name}"
 
@@ -394,7 +405,7 @@ def _try_smart_merge_inner(
             timeline_tracker = FileTimelineTracker(project_dir)
             timeline_tracker.capture_worktree_state(spec_name, worktree_path)
             debug(MODULE, "Captured worktree state for timeline tracking")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             debug_warning(MODULE, f"Could not capture worktree state: {e}")
 
         # Initialize the orchestrator
@@ -524,12 +535,21 @@ def _try_smart_merge_inner(
             },
         }
 
-    except Exception as e:
-        # If smart merge fails, fall back to git
-        import traceback
-
-        print(muted(f"  Smart merge error: {e}"))
-        traceback.print_exc()
+    except subprocess.TimeoutExpired as e:
+        # If smart merge times out, fall back to git
+        print(muted(f"  Smart merge timed out: {e}"))
+        return None
+    except subprocess.SubprocessError as e:
+        # If a subprocess fails, fall back to git
+        print(muted(f"  Smart merge subprocess error: {e}"))
+        return None
+    except OSError as e:
+        # If OS-level error, fall back to git
+        print(muted(f"  Smart merge OS error: {e}"))
+        return None
+    except ValueError as e:
+        # If parsing error, fall back to git
+        print(muted(f"  Smart merge parse error: {e}"))
         return None
 
 
@@ -560,6 +580,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
         )
         if base_result.returncode == 0:
             result["base_branch"] = base_result.stdout.strip()
@@ -570,6 +591,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
         )
         if merge_base_result.returncode != 0:
             debug_warning(MODULE, "Could not find merge base")
@@ -583,12 +605,14 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
         )
         spec_commit_result = subprocess.run(
             ["git", "rev-parse", spec_branch],
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
         )
 
         if main_commit_result.returncode != 0 or spec_commit_result.returncode != 0:
@@ -612,6 +636,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
         )
 
         # merge-tree returns exit code 1 if there are conflicts
@@ -643,6 +668,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
                     cwd=project_dir,
                     capture_output=True,
                     text=True,
+                    timeout=GIT_SUBPROCESS_TIMEOUT,
                 )
                 main_files = (
                     set(main_files_result.stdout.strip().split("\n"))
@@ -655,6 +681,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
                     cwd=project_dir,
                     capture_output=True,
                     text=True,
+                    timeout=GIT_SUBPROCESS_TIMEOUT,
                 )
                 spec_files = (
                     set(spec_files_result.stdout.strip().split("\n"))
@@ -669,8 +696,12 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
                     f for f in conflicting if not _is_auto_claude_file(f)
                 ]
 
-    except Exception as e:
-        print(muted(f"  Error checking git conflicts: {e}"))
+    except subprocess.TimeoutExpired as e:
+        print(muted(f"  Git command timed out: {e}"))
+    except subprocess.SubprocessError as e:
+        print(muted(f"  Git command error: {e}"))
+    except OSError as e:
+        print(muted(f"  Error running git: {e}"))
 
     return result
 
@@ -733,6 +764,7 @@ def _resolve_git_conflicts_with_ai(
         cwd=project_dir,
         capture_output=True,
         text=True,
+        timeout=GIT_SUBPROCESS_TIMEOUT,
     )
     merge_base = (
         merge_base_result.stdout.strip() if merge_base_result.returncode == 0 else None
@@ -773,21 +805,35 @@ def _resolve_git_conflicts_with_ai(
         print(muted(f"  Copying {len(new_files)} new file(s) first (dependencies)..."))
         for file_path, status in new_files:
             try:
+                # Validate path before any filesystem operation (CWE-22)
+                path_result = validate_path_within_base(file_path, project_dir)
+                if not path_result.is_valid:
+                    debug_warning(MODULE, f"Path traversal blocked: {file_path}")
+                    continue
+                
                 content = _get_file_content_from_ref(
                     project_dir, spec_branch, file_path
                 )
                 if content is not None:
                     # Apply path mapping - write to new location if file was renamed
                     target_file_path = _apply_path_mapping(file_path, path_mappings)
-                    target_path = project_dir / target_file_path
+                    
+                    if target_file_path != file_path:
+                        target_path = project_dir / target_file_path
+                    else:
+                        target_path = path_result.resolved_path
+                        
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     target_path.write_text(content, encoding="utf-8")
+                    
                     subprocess.run(
                         ["git", "add", target_file_path],
                         cwd=project_dir,
                         capture_output=True,
+                        timeout=GIT_SUBPROCESS_TIMEOUT,
                     )
                     resolved_files.append(target_file_path)
+                    
                     if target_file_path != file_path:
                         debug(
                             MODULE,
@@ -795,7 +841,11 @@ def _resolve_git_conflicts_with_ai(
                         )
                     else:
                         debug(MODULE, f"Copied new file: {file_path}")
-            except Exception as e:
+            except subprocess.TimeoutExpired as e:
+                debug_warning(MODULE, f"Git add timed out for {file_path}: {e}")
+            except subprocess.SubprocessError as e:
+                debug_warning(MODULE, f"Git add failed for {file_path}: {e}")
+            except OSError as e:
                 debug_warning(MODULE, f"Could not copy new file {file_path}: {e}")
 
     # Categorize conflicting files for processing
@@ -884,7 +934,25 @@ def _resolve_git_conflicts_with_ai(
                         ),
                     )
 
-        except Exception as e:
+        except subprocess.TimeoutExpired as e:
+            print(error(f"    ✗ Failed to categorize {file_path}: Git operation timed out"))
+            remaining_conflicts.append(
+                {
+                    "file": file_path,
+                    "reason": f"Git operation timed out: {e}",
+                    "severity": "high",
+                }
+            )
+        except subprocess.SubprocessError as e:
+            print(error(f"    ✗ Failed to categorize {file_path}: {e}"))
+            remaining_conflicts.append(
+                {
+                    "file": file_path,
+                    "reason": str(e),
+                    "severity": "high",
+                }
+            )
+        except OSError as e:
             print(error(f"    ✗ Failed to categorize {file_path}: {e}"))
             remaining_conflicts.append(
                 {
@@ -899,28 +967,62 @@ def _resolve_git_conflicts_with_ai(
         print(muted(f"  Processing {len(simple_merges)} simple file(s)..."))
         for file_path, merged_content in simple_merges:
             try:
+                # Validate path before any filesystem operation (CWE-22)
+                path_result = validate_path_within_base(file_path, project_dir)
+                if not path_result.is_valid:
+                    print(error(f"    ✗ {file_path}: Path validation failed - {path_result.error}"))
+                    remaining_conflicts.append(
+                        {
+                            "file": file_path,
+                            "reason": f"Security: {path_result.error}",
+                            "severity": "critical",
+                        }
+                    )
+                    continue
+
+                target_path = path_result.resolved_path
                 if merged_content is not None:
-                    target_path = project_dir / file_path
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     target_path.write_text(merged_content, encoding="utf-8")
                     subprocess.run(
-                        ["git", "add", file_path], cwd=project_dir, capture_output=True
+                        ["git", "add", "--", file_path],
+                        cwd=project_dir,
+                        capture_output=True,
+                        timeout=GIT_SUBPROCESS_TIMEOUT,
                     )
                     resolved_files.append(file_path)
                     print(success(f"    ✓ {file_path} (new file)"))
                 else:
                     # Delete the file
-                    target_path = project_dir / file_path
                     if target_path.exists():
                         target_path.unlink()
-                        subprocess.run(
-                            ["git", "add", file_path],
-                            cwd=project_dir,
-                            capture_output=True,
-                        )
+                    subprocess.run(
+                        ["git", "add", "-u", "--", file_path],
+                        cwd=project_dir,
+                        capture_output=True,
+                        timeout=GIT_SUBPROCESS_TIMEOUT,
+                    )
                     resolved_files.append(file_path)
                     print(success(f"    ✓ {file_path} (deleted)"))
-            except Exception as e:
+            except subprocess.TimeoutExpired:
+                print(error(f"    ✗ {file_path}: Git operation timed out"))
+                remaining_conflicts.append(
+                    {
+                        "file": file_path,
+                        "reason": "Git operation timed out",
+                        "severity": "high",
+                    }
+                )
+            except subprocess.SubprocessError as e:
+                print(error(f"    ✗ {file_path}: {e}"))
+                remaining_conflicts.append(
+                    {
+                        "file": file_path,
+                        "reason": str(e),
+                        "severity": "high",
+                    }
+                )
+            except OSError as e:
                 print(error(f"    ✗ {file_path}: {e}"))
                 remaining_conflicts.append(
                     {
@@ -956,13 +1058,27 @@ def _resolve_git_conflicts_with_ai(
         # Process results
         for result in parallel_results:
             if result.success:
-                target_path = project_dir / result.file_path
+                # Validate path before any filesystem operation (CWE-22)
+                path_result = validate_path_within_base(result.file_path, project_dir)
+                if not path_result.is_valid:
+                    print(error(f"    ✗ {result.file_path}: Path traversal blocked"))
+                    remaining_conflicts.append(
+                        {
+                            "file": result.file_path,
+                            "reason": "Path traversal blocked",
+                            "severity": "critical",
+                        }
+                    )
+                    continue
+                
+                target_path = path_result.resolved_path
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 target_path.write_text(result.merged_content, encoding="utf-8")
                 subprocess.run(
-                    ["git", "add", result.file_path],
+                    ["git", "add", "--", result.file_path],
                     cwd=project_dir,
                     capture_output=True,
+                    timeout=GIT_SUBPROCESS_TIMEOUT,
                 )
                 resolved_files.append(result.file_path)
 
@@ -1106,29 +1222,46 @@ def _resolve_git_conflicts_with_ai(
     # Process simple copy/delete files
     for file_path, target_file_path, status in simple_copy_files:
         try:
+            # Validate path before any filesystem operation (CWE-22)
+            path_result = validate_path_within_base(file_path, project_dir)
+            if not path_result.is_valid:
+                print(muted(f"    Warning: Path traversal blocked for {file_path}"))
+                continue
+            
             if status == "D":
                 # Deleted in worktree - delete from target path
-                target_path = project_dir / target_file_path
+                if target_file_path != file_path:
+                     target_path = project_dir / target_file_path
+                else:
+                     target_path = path_result.resolved_path
+
                 if target_path.exists():
                     target_path.unlink()
-                    subprocess.run(
-                        ["git", "add", target_file_path],
-                        cwd=project_dir,
-                        capture_output=True,
-                    )
+                
+                subprocess.run(
+                    ["git", "add", target_file_path],
+                    cwd=project_dir,
+                    capture_output=True,
+                    timeout=GIT_SUBPROCESS_TIMEOUT,
+                )
             else:
                 # Modified without path change - simple copy
                 content = _get_file_content_from_ref(
                     project_dir, spec_branch, file_path
                 )
                 if content is not None:
-                    target_path = project_dir / target_file_path
+                    if target_file_path != file_path:
+                        target_path = project_dir / target_file_path
+                    else:
+                        target_path = path_result.resolved_path
+                        
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     target_path.write_text(content, encoding="utf-8")
                     subprocess.run(
                         ["git", "add", target_file_path],
                         cwd=project_dir,
                         capture_output=True,
+                        timeout=GIT_SUBPROCESS_TIMEOUT,
                     )
                     resolved_files.append(target_file_path)
                     if target_file_path != file_path:
@@ -1136,11 +1269,18 @@ def _resolve_git_conflicts_with_ai(
                             MODULE,
                             f"Merged with path mapping: {file_path} -> {target_file_path}",
                         )
-        except Exception as e:
+        except subprocess.TimeoutExpired as e:
+            print(muted(f"    Warning: Git operation timed out for {file_path}: {e}"))
+        except subprocess.SubprocessError as e:
+            print(muted(f"    Warning: Git operation failed for {file_path}: {e}"))
+        except OSError as e:
             print(muted(f"    Warning: Could not process {file_path}: {e}"))
 
     # V2: Record merge completion in Evolution Tracker for future context
-    # TODO: _record_merge_completion not yet implemented - see line 141
+    # FIXME(v3): _record_merge_completion not yet implemented
+    # This would provide cross-session merge history for smarter future merges.
+    # Implementation would update FileEvolutionTracker with merge outcomes.
+    # Priority: Low - current merge system works without this context.
     # if resolved_files:
     #     _record_merge_completion(project_dir, spec_name, resolved_files)
 
@@ -1197,12 +1337,6 @@ def _resolve_git_conflicts_with_ai(
 # =============================================================================
 # Parallel AI Merge Implementation
 # =============================================================================
-
-import asyncio
-import logging
-import os
-
-_merge_logger = logging.getLogger(__name__)
 
 # System prompt for AI file merging
 AI_MERGE_SYSTEM_PROMPT = """You are an expert code merge assistant. Your task is to perform a 3-way merge of code files.
@@ -1497,7 +1631,15 @@ async def _merge_file_with_ai_async(
                     error="AI returned empty response",
                 )
 
-        except Exception as e:
+        except OSError as e:
+            _merge_logger.error(f"Failed to merge {task.file_path}: {e}")
+            return ParallelMergeResult(
+                file_path=task.file_path,
+                merged_content=None,
+                success=False,
+                error=str(e),
+            )
+        except RuntimeError as e:
             _merge_logger.error(f"Failed to merge {task.file_path}: {e}")
             return ParallelMergeResult(
                 file_path=task.file_path,

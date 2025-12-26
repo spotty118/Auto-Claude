@@ -193,7 +193,7 @@ class GraphitiMemory:
             )
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to initialize Graphiti: {e}")
             self._record_error(f"Initialization failed: {e}")
             self._available = False

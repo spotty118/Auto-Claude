@@ -8,5 +8,6 @@ export const ALL_IDEATION_TYPES: IdeationType[] = [
   'documentation_gaps',
   'security_hardening',
   'performance_optimizations',
-  'code_quality'
+  'code_quality',
+  'bug_finder'
 ];

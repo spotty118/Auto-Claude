@@ -226,7 +226,7 @@ class AgentRunner:
                 )
                 return True, response_text
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             debug_error(
                 "agent_runner",
                 f"Agent session error: {e}",

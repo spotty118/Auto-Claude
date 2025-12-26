@@ -99,7 +99,7 @@ def _get_spec_context(spec_dir: Path) -> dict:
             )
             if overview_match:
                 context["description"] = overview_match.group(1).strip()[:200]
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"Could not read spec.md: {e}")
 
     # Try to read requirements.json for metadata
@@ -113,7 +113,7 @@ def _get_spec_context(spec_dir: Path) -> dict:
                 context["category"] = req_data["workflow_type"]
             if req_data.get("task_description") and not context["description"]:
                 context["description"] = req_data["task_description"][:200]
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             logger.debug(f"Could not read requirements.json: {e}")
 
     # Try to read implementation_plan.json for GitHub issue
@@ -130,7 +130,7 @@ def _get_spec_context(spec_dir: Path) -> dict:
                 context["title"] = plan_data.get("feature") or plan_data.get(
                     "title", ""
                 )
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             logger.debug(f"Could not read implementation_plan.json: {e}")
 
     return context
@@ -227,7 +227,7 @@ async def _call_claude_haiku(prompt: str) -> str:
             logger.info(f"Generated commit message: {len(response_text)} chars")
             return response_text.strip()
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error(f"Claude SDK call failed: {e}")
         print(f"    [WARN] Commit message generation failed: {e}", file=sys.stderr)
         return ""
@@ -282,20 +282,32 @@ def generate_commit_message_sync(
             loop = None
 
         if loop and loop.is_running():
-            # Already in an async context - run in a new thread
-            # Use lambda to ensure coroutine is created inside the worker thread
+            # Already in an async context - run in a new thread with its own event loop
+            # This is safer than nest_asyncio and avoids event loop conflicts
             import concurrent.futures
 
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = pool.submit(
-                    lambda: asyncio.run(_call_claude_haiku(prompt))
-                ).result()
+            def _run_async_in_thread():
+                """Run async code in a dedicated thread with fresh event loop."""
+                try:
+                    return asyncio.run(_call_claude_haiku(prompt))
+                except (OSError, RuntimeError) as e:
+                    logger.error(f"Thread async execution failed: {e}")
+                    return ""
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_run_async_in_thread)
+                try:
+                    # Add timeout to prevent hanging indefinitely
+                    result = future.result(timeout=60)
+                except concurrent.futures.TimeoutError:
+                    logger.error("Commit message generation timed out")
+                    result = ""
         else:
             result = asyncio.run(_call_claude_haiku(prompt))
 
         if result:
             return result
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error(f"Failed to generate commit message: {e}")
 
     # Fallback message
@@ -356,7 +368,7 @@ async def generate_commit_message(
         result = await _call_claude_haiku(prompt)
         if result:
             return result
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error(f"Failed to generate commit message: {e}")
 
     # Fallback message

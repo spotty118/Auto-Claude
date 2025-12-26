@@ -5,7 +5,8 @@ import type {
   DocumentationGapIdea,
   SecurityHardeningIdea,
   PerformanceOptimizationIdea,
-  CodeQualityIdea
+  CodeQualityIdea,
+  BugFinderIdea
 } from '../../../shared/types';
 
 export function isCodeImprovementIdea(idea: Idea): idea is CodeImprovementIdea {
@@ -30,4 +31,8 @@ export function isPerformanceOptimizationIdea(idea: Idea): idea is PerformanceOp
 
 export function isCodeQualityIdea(idea: Idea): idea is CodeQualityIdea {
   return idea.type === 'code_quality';
+}
+
+export function isBugFinderIdea(idea: Idea): idea is BugFinderIdea {
+  return idea.type === 'bug_finder';
 }

@@ -18,6 +18,9 @@ from workspace import get_existing_build_worktree
 
 from .utils import get_specs_dir
 
+# Subprocess timeout for launching spec runner (5 minutes max)
+SPEC_RUNNER_TIMEOUT = 300
+
 
 def list_specs(project_dir: Path, dev_mode: bool = False) -> list[dict]:
     """
@@ -137,25 +140,37 @@ def print_specs_list(
                 if task:
                     # Direct mode: create spec and start building
                     print(f"\nStarting build for: {task}\n")
-                    subprocess.run(
-                        [
-                            python_path,
-                            str(spec_runner),
-                            "--task",
-                            task,
-                            "--complexity",
-                            "simple",
-                            "--auto-approve",
-                        ],
-                        cwd=project_dir,
-                    )
+                    try:
+                        subprocess.run(
+                            [
+                                python_path,
+                                str(spec_runner),
+                                "--task",
+                                task,
+                                "--complexity",
+                                "simple",
+                                "--auto-approve",
+                            ],
+                            cwd=project_dir,
+                            timeout=SPEC_RUNNER_TIMEOUT,
+                        )
+                    except subprocess.TimeoutExpired:
+                        print("\nSpec creation timed out.")
+                    except subprocess.SubprocessError as e:
+                        print(f"\nSpec creation failed: {e}")
                 else:
                     # Interactive mode
                     print("\nLaunching interactive mode...\n")
-                    subprocess.run(
-                        [python_path, str(spec_runner), "--interactive"],
-                        cwd=project_dir,
-                    )
+                    try:
+                        subprocess.run(
+                            [python_path, str(spec_runner), "--interactive"],
+                            cwd=project_dir,
+                            timeout=SPEC_RUNNER_TIMEOUT,
+                        )
+                    except subprocess.TimeoutExpired:
+                        print("\nInteractive mode timed out.")
+                    except subprocess.SubprocessError as e:
+                        print(f"\nInteractive mode failed: {e}")
                 return
             else:
                 print("\nCreate your first spec:")

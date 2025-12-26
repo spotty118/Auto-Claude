@@ -45,6 +45,9 @@ _git_hook_check_done = False
 
 MODULE = "workspace.setup"
 
+# Git command timeout
+GIT_TIMEOUT = 10
+
 
 def choose_workspace(
     project_dir: Path,
@@ -171,9 +174,11 @@ def copy_spec_to_worktree(
     target_spec_dir.parent.mkdir(parents=True, exist_ok=True)
 
     # Copy spec files (overwrite if exists to get latest)
-    if target_spec_dir.exists():
+    # Remove existing dir first for clean copy, use try/except to avoid TOCTOU
+    try:
         shutil.rmtree(target_spec_dir)
-
+    except FileNotFoundError:
+        pass
     shutil.copytree(source_spec_dir, target_spec_dir)
 
     return target_spec_dir
@@ -285,7 +290,7 @@ def ensure_timeline_hook_installed(project_dir: Path) -> None:
         install_hook(project_dir)
         debug(MODULE, "Auto-installed FileTimelineTracker git hook")
 
-    except Exception as e:
+    except OSError as e:
         # Non-fatal - hook installation is optional
         debug_warning(MODULE, f"Could not auto-install timeline hook: {e}")
 
@@ -324,13 +329,19 @@ def initialize_timeline_tracking(
                         files_to_modify.extend(subtask.get("files", []))
 
         # Get the current branch point commit
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-        )
-        branch_point = result.stdout.strip() if result.returncode == 0 else None
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=GIT_TIMEOUT,
+            )
+            branch_point = result.stdout.strip() if result.returncode == 0 else None
+        except subprocess.TimeoutExpired:
+            branch_point = None
+        except subprocess.SubprocessError:
+            branch_point = None
 
         if files_to_modify and branch_point:
             # Register the task with known files
@@ -356,10 +367,12 @@ def initialize_timeline_tracking(
                 task_title=task_title,
             )
 
-    except Exception as e:
+    except OSError as e:
         # Non-fatal - timeline tracking is supplementary
         debug_warning(MODULE, f"Could not initialize timeline tracking: {e}")
         print(muted(f"  Note: Timeline tracking could not be initialized: {e}"))
+    except json.JSONDecodeError as e:
+        debug_warning(MODULE, f"Invalid implementation plan JSON: {e}")
 
 
 # Export private functions for backward compatibility

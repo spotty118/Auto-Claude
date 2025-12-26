@@ -38,6 +38,7 @@ from debug import (
     debug_error,
     debug_section,
     debug_success,
+    debug_warning,
 )
 
 
@@ -61,8 +62,8 @@ def load_project_context(project_dir: str) -> str:
             context_parts.append(
                 f"## Project Structure\n```json\n{json.dumps(summary, indent=2)}\n```"
             )
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            debug_warning("insights", f"Failed to load project index: {e}")
 
     # Load roadmap if available
     roadmap_path = Path(project_dir) / ".auto-claude" / "roadmap" / "roadmap.json"
@@ -79,8 +80,8 @@ def load_project_context(project_dir: str) -> str:
             context_parts.append(
                 f"## Roadmap Features\n```json\n{json.dumps(feature_summary, indent=2)}\n```"
             )
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            debug_warning("insights", f"Failed to load roadmap: {e}")
 
     # Load existing tasks
     tasks_path = Path(project_dir) / ".auto-claude" / "specs"
@@ -92,8 +93,8 @@ def load_project_context(project_dir: str) -> str:
                 context_parts.append(
                     "## Existing Tasks/Specs\n- " + "\n- ".join(task_names)
                 )
-        except Exception:
-            pass
+        except OSError as e:
+            debug_warning("insights", f"Failed to load existing tasks: {e}")
 
     return (
         "\n\n".join(context_parts)
@@ -264,10 +265,12 @@ Current question: {message}"""
                 response_length=len(response_text),
             )
 
-    except Exception as e:
-        print(f"Error using Claude SDK: {e}", file=sys.stderr)
+    except OSError as e:
+        print(f"OS error using Claude SDK: {e}", file=sys.stderr)
+        run_simple(project_dir, message, history)
+    except RuntimeError as e:
+        print(f"Runtime error using Claude SDK: {e}", file=sys.stderr)
         import traceback
-
         traceback.print_exc(file=sys.stderr)
         run_simple(project_dir, message, history)
 
@@ -322,8 +325,10 @@ Assistant:"""
         print("Request timed out. Please try a shorter query.")
     except FileNotFoundError:
         print("Claude CLI not found. Please ensure it is installed and in your PATH.")
-    except Exception as e:
-        print(f"Error: {e}")
+    except subprocess.SubprocessError as e:
+        print(f"Subprocess error: {e}")
+    except OSError as e:
+        print(f"OS error: {e}")
 
 
 def main():

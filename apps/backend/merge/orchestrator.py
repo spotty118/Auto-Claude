@@ -285,7 +285,7 @@ class MergeOrchestrator:
 
             report.success = report.stats.files_failed == 0
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             debug_error(MODULE, f"Merge failed for task {task_id}", error=str(e))
             logger.exception(f"Merge failed for task {task_id}")
             report.success = False
@@ -379,7 +379,7 @@ class MergeOrchestrator:
 
             report.success = report.stats.files_failed == 0
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.exception("Merge failed")
             report.success = False
             report.error = str(e)
@@ -624,7 +624,7 @@ class MergeOrchestrator:
                 try:
                     target_path.write_text(result.merged_content, encoding="utf-8")
                     logger.debug(f"Applied merged content to: {target_path}")
-                except Exception as e:
+                except OSError as e:
                     logger.error(f"Failed to write {target_path}: {e}")
                     success = False
 

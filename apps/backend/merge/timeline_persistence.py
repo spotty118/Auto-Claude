@@ -83,7 +83,7 @@ class TimelinePersistence:
 
             debug(MODULE, f"Loaded {len(timelines)} timelines from storage")
 
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             logger.error(f"Failed to load timelines: {e}")
 
         return timelines
@@ -104,7 +104,7 @@ class TimelinePersistence:
             with open(timeline_file, "w") as f:
                 json.dump(timeline.to_dict(), f, indent=2)
 
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to persist timeline for {file_path}: {e}")
 
     def update_index(self, file_paths: list[str]) -> None:

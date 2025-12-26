@@ -336,7 +336,7 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
 
             return "error", error_msg
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         debug_error(
             "qa_reviewer",
             f"QA session exception: {e}",

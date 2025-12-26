@@ -60,6 +60,6 @@ def create_cross_encoder(
         )
 
         return OpenAIRerankerClient(client=llm_client, config=llm_config)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.warning(f"Could not create cross-encoder: {e}")
         return None

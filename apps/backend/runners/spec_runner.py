@@ -75,8 +75,11 @@ if sys.platform == "win32":
             pass
     # Clean up temporary variables
     del _stream_name, _stream
-    if "_new_stream" in dir():
+    # Use try/except instead of dir() - dir() checks module scope, not locals
+    try:
         del _new_stream
+    except NameError:
+        pass  # Variable wasn't created (reconfigure succeeded first)
 
 # Add auto-claude to path (parent of runners/)
 sys.path.insert(0, str(Path(__file__).parent.parent))

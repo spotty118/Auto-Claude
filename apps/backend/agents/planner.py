@@ -170,7 +170,7 @@ async def run_followup_planner(
             status_manager.update(state=BuildState.ERROR)
             return False
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print()
         print_status(f"Follow-up planning error: {e}", "error")
         if task_logger:

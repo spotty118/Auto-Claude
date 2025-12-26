@@ -81,7 +81,8 @@ const initialTypeStates: Record<IdeationType, IdeationTypeState> = {
   documentation_gaps: 'pending',
   security_hardening: 'pending',
   performance_optimizations: 'pending',
-  code_quality: 'pending'
+  code_quality: 'pending',
+  bug_finder: 'pending'
 };
 
 export const useIdeationStore = create<IdeationState>((set) => ({
@@ -102,9 +103,15 @@ export const useIdeationStore = create<IdeationState>((set) => ({
   setGenerationStatus: (status) => set({ generationStatus: status }),
 
   setConfig: (newConfig) =>
-    set((state) => ({
-      config: { ...state.config, ...newConfig }
-    })),
+    set((state) => {
+      const newFullConfig = { ...state.config, ...newConfig };
+      console.log('[DEBUG setConfig] Updating config:', {
+        previous: state.config.enabledTypes,
+        incoming: newConfig.enabledTypes,
+        result: newFullConfig.enabledTypes
+      });
+      return { config: newFullConfig };
+    }),
 
   updateIdeaStatus: (ideaId, status) =>
     set((state) => {
@@ -361,7 +368,18 @@ export async function loadIdeation(projectId: string): Promise<void> {
   }
 
   if (result.success && result.data) {
-    useIdeationStore.getState().setSession(result.data);
+    const store = useIdeationStore.getState();
+    store.setSession(result.data);
+
+    // Restore config from saved session so user preferences persist across restarts
+    if (result.data.config?.enabledTypes?.length > 0) {
+      store.setConfig({
+        enabledTypes: result.data.config.enabledTypes,
+        includeRoadmapContext: result.data.config.includeRoadmapContext ?? true,
+        includeKanbanContext: result.data.config.includeKanbanContext ?? true,
+        maxIdeasPerType: result.data.config.maxIdeasPerType ?? 5
+      });
+    }
   } else {
     useIdeationStore.getState().setSession(null);
   }
@@ -453,6 +471,11 @@ export async function stopIdeation(projectId: string): Promise<boolean> {
 export async function refreshIdeation(projectId: string): Promise<void> {
   const store = useIdeationStore.getState();
   const config = store.config;
+
+  console.log('[DEBUG refreshIdeation] Config from store:', {
+    enabledTypes: config.enabledTypes,
+    fullConfig: config
+  });
 
   await window.electronAPI.stopIdeation(projectId);
 

@@ -9,6 +9,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Subprocess timeout constants
+GIT_TIMEOUT_SHORT = 10   # Simple git queries (rev-parse, branch)
+GIT_TIMEOUT_MEDIUM = 30  # Diff operations
+
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
 if str(_PARENT_DIR) not in sys.path:
@@ -62,25 +66,33 @@ def _detect_default_branch(project_dir: Path) -> str:
     env_branch = os.getenv("DEFAULT_BRANCH")
     if env_branch:
         # Verify the branch exists
-        result = subprocess.run(
-            ["git", "rev-parse", "--verify", env_branch],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            return env_branch
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", env_branch],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=GIT_TIMEOUT_SHORT,
+            )
+            if result.returncode == 0:
+                return env_branch
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            pass
 
     # 2. Auto-detect main/master
     for branch in ["main", "master"]:
-        result = subprocess.run(
-            ["git", "rev-parse", "--verify", branch],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            return branch
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", branch],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=GIT_TIMEOUT_SHORT,
+            )
+            if result.returncode == 0:
+                return branch
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            continue
 
     # 3. Fall back to "main" as final default
     return "main"
@@ -106,9 +118,16 @@ def _get_changed_files_from_git(
             capture_output=True,
             text=True,
             check=True,
+            timeout=GIT_TIMEOUT_MEDIUM,
         )
         files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
         return files
+    except subprocess.TimeoutExpired:
+        debug_warning(
+            "workspace_commands",
+            "git diff timed out",
+        )
+        return []
     except subprocess.CalledProcessError as e:
         # Log the failure before trying fallback
         debug_warning(
@@ -124,9 +143,16 @@ def _get_changed_files_from_git(
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
             return files
+        except subprocess.TimeoutExpired:
+            debug_warning(
+                "workspace_commands",
+                "git diff (two-arg) timed out",
+            )
+            return []
         except subprocess.CalledProcessError as e:
             # Log the failure before returning empty list
             debug_warning(
@@ -135,6 +161,10 @@ def _get_changed_files_from_git(
                 f"stderr={e.stderr.strip() if e.stderr else 'N/A'}",
             )
             return []
+        except (subprocess.SubprocessError, OSError):
+            return []
+    except (subprocess.SubprocessError, OSError):
+        return []
 
 
 # Import debug utilities
@@ -231,6 +261,7 @@ def _generate_and_save_commit_message(project_dir: Path, spec_name: str) -> None
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             if result.returncode == 0:
                 diff_summary = result.stdout.strip()
@@ -241,13 +272,18 @@ def _generate_and_save_commit_message(project_dir: Path, spec_name: str) -> None
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             if result.returncode == 0:
                 files_changed = [
                     f.strip() for f in result.stdout.strip().split("\n") if f.strip()
                 ]
-        except Exception as e:
-            debug_warning(MODULE, f"Could not get diff summary: {e}")
+        except subprocess.TimeoutExpired as e:
+            debug_warning(MODULE, f"Git diff timed out: {e}")
+        except subprocess.SubprocessError as e:
+            debug_warning(MODULE, f"Git diff failed: {e}")
+        except OSError as e:
+            debug_warning(MODULE, f"Could not run git: {e}")
 
         # Generate commit message
         debug(MODULE, "Generating commit message suggestion...")
@@ -277,7 +313,7 @@ def _generate_and_save_commit_message(project_dir: Path, spec_name: str) -> None
 
     except ImportError:
         debug_warning(MODULE, "commit_message module not available")
-    except Exception as e:
+    except OSError as e:
         debug_warning(MODULE, f"Failed to generate commit message: {e}")
 
 
@@ -392,6 +428,7 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_TIMEOUT_SHORT,
         )
         if base_result.returncode == 0:
             result["base_branch"] = base_result.stdout.strip()
@@ -402,6 +439,7 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_TIMEOUT_SHORT,
         )
         if merge_base_result.returncode != 0:
             debug_warning(MODULE, "Could not find merge base")
@@ -415,6 +453,7 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_TIMEOUT_SHORT,
         )
         if ahead_result.returncode == 0:
             commits_behind = int(ahead_result.stdout.strip())
@@ -440,6 +479,7 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=GIT_TIMEOUT_MEDIUM,
         )
 
         # merge-tree returns exit code 1 if there are conflicts
@@ -478,6 +518,7 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
                     cwd=project_dir,
                     capture_output=True,
                     text=True,
+                    timeout=GIT_TIMEOUT_MEDIUM,
                 )
                 main_files = (
                     set(main_files_result.stdout.strip().split("\n"))
@@ -491,6 +532,7 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
                     cwd=project_dir,
                     capture_output=True,
                     text=True,
+                    timeout=GIT_TIMEOUT_MEDIUM,
                 )
                 spec_files = (
                     set(spec_files_result.stdout.strip().split("\n"))
@@ -512,11 +554,14 @@ def _check_git_merge_conflicts(project_dir: Path, spec_name: str) -> dict:
         else:
             debug_success(MODULE, "Git merge-tree: no conflicts detected")
 
-    except Exception as e:
-        debug_error(MODULE, f"Error checking git conflicts: {e}")
-        import traceback
-
-        debug_verbose(MODULE, "Exception traceback", traceback=traceback.format_exc())
+    except subprocess.TimeoutExpired as e:
+        debug_error(MODULE, f"Git command timed out: {e}")
+    except subprocess.SubprocessError as e:
+        debug_error(MODULE, f"Git command failed: {e}")
+    except OSError as e:
+        debug_error(MODULE, f"Could not run git: {e}")
+    except ValueError as e:
+        debug_error(MODULE, f"Error parsing git output: {e}")
 
     return result
 
@@ -786,7 +831,7 @@ def handle_merge_preview_command(
 
         return result
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         debug_error(MODULE, "Merge preview failed", error=str(e))
         import traceback
 

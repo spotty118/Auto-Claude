@@ -229,7 +229,7 @@ class CIDiscovery:
                 if isinstance(env, dict):
                     result.environment_variables.extend(env.keys())
 
-            except Exception:
+            except (KeyError, TypeError, ValueError):
                 continue
 
         return result
@@ -299,7 +299,7 @@ class CIDiscovery:
             if isinstance(variables, dict):
                 result.environment_variables.extend(variables.keys())
 
-        except Exception:
+        except (OSError, KeyError, TypeError, ValueError):
             pass
 
         return result
@@ -357,7 +357,7 @@ class CIDiscovery:
                     )
                 )
 
-        except Exception:
+        except (OSError, KeyError, TypeError, ValueError):
             pass
 
         return result
@@ -402,7 +402,7 @@ class CIDiscovery:
                     )
                 )
 
-        except Exception:
+        except (OSError, re.error, TypeError):
             pass
 
         return result
@@ -412,7 +412,7 @@ class CIDiscovery:
         if HAS_YAML:
             try:
                 return yaml.safe_load(content)
-            except Exception:
+            except yaml.YAMLError:
                 return None
 
         # Basic fallback for simple YAML (very limited)

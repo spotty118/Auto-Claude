@@ -81,7 +81,7 @@ class LogStorage:
                     json.dump(self._data, f, indent=2, ensure_ascii=False)
                 # Atomic rename (on POSIX systems, rename is atomic)
                 os.replace(tmp_path, self.log_file)
-            except Exception:
+            except (OSError, TypeError, ValueError):
                 # Clean up temp file on failure
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)

@@ -16,7 +16,8 @@ export const IDEATION_TYPE_LABELS: Record<string, string> = {
   documentation_gaps: 'Documentation',
   security_hardening: 'Security',
   performance_optimizations: 'Performance',
-  code_quality: 'Code Quality'
+  code_quality: 'Code Quality',
+  bug_finder: 'Bug Finder'
 };
 
 export const IDEATION_TYPE_DESCRIPTIONS: Record<string, string> = {
@@ -25,7 +26,8 @@ export const IDEATION_TYPE_DESCRIPTIONS: Record<string, string> = {
   documentation_gaps: 'Missing or outdated documentation that needs attention',
   security_hardening: 'Security vulnerabilities and hardening opportunities',
   performance_optimizations: 'Performance bottlenecks and optimization opportunities',
-  code_quality: 'Refactoring opportunities, large files, code smells, and best practice violations'
+  code_quality: 'Refactoring opportunities, large files, code smells, and best practice violations',
+  bug_finder: 'Potential bugs, logic errors, race conditions, and edge cases identified through code analysis'
 };
 
 // Ideation type colors
@@ -35,7 +37,8 @@ export const IDEATION_TYPE_COLORS: Record<string, string> = {
   documentation_gaps: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
   security_hardening: 'bg-destructive/10 text-destructive border-destructive/30',
   performance_optimizations: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-  code_quality: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+  code_quality: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+  bug_finder: 'bg-rose-500/10 text-rose-400 border-rose-500/30'
 };
 
 // Ideation type icons (Lucide icon names)
@@ -45,7 +48,8 @@ export const IDEATION_TYPE_ICONS: Record<string, string> = {
   documentation_gaps: 'BookOpen',
   security_hardening: 'Shield',
   performance_optimizations: 'Gauge',
-  code_quality: 'Code2'
+  code_quality: 'Code2',
+  bug_finder: 'Bug'
 };
 
 // ============================================
@@ -161,6 +165,26 @@ export const CODE_QUALITY_SEVERITY_COLORS: Record<string, string> = {
   critical: 'bg-destructive/10 text-destructive'
 };
 
+// Bug finder category labels
+export const BUG_FINDER_CATEGORY_LABELS: Record<string, string> = {
+  logic_error: 'Logic Error',
+  race_condition: 'Race Condition',
+  error_handling: 'Error Handling',
+  edge_case: 'Edge Case',
+  resource_leak: 'Resource Leak',
+  integration: 'Integration',
+  null_safety: 'Null Safety',
+  type_safety: 'Type Safety'
+};
+
+// Bug finder confidence colors
+export const BUG_FINDER_CONFIDENCE_COLORS: Record<string, string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-warning/10 text-warning',
+  high: 'bg-info/10 text-info',
+  confirmed: 'bg-success/10 text-success'
+};
+
 // ============================================
 // Default Configuration
 // ============================================
@@ -168,7 +192,7 @@ export const CODE_QUALITY_SEVERITY_COLORS: Record<string, string> = {
 // Default ideation config
 // Note: high_value_features removed, low_hanging_fruit renamed to code_improvements
 export const DEFAULT_IDEATION_CONFIG = {
-  enabledTypes: ['code_improvements', 'ui_ux_improvements', 'security_hardening'] as const,
+  enabledTypes: ['code_improvements', 'ui_ux_improvements', 'security_hardening', 'bug_finder'] as const,
   includeRoadmapContext: true,
   includeKanbanContext: true,
   maxIdeasPerType: 5

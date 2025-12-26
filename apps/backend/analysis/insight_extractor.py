@@ -106,7 +106,10 @@ def get_session_diff(
     except subprocess.TimeoutExpired:
         logger.warning("Git diff timed out")
         return "(Git diff timed out)"
-    except Exception as e:
+    except subprocess.SubprocessError as e:
+        logger.warning(f"Failed to get git diff: {e}")
+        return f"(Failed to get diff: {e})"
+    except OSError as e:
         logger.warning(f"Failed to get git diff: {e}")
         return f"(Failed to get diff: {e})"
 
@@ -141,7 +144,13 @@ def get_changed_files(
         files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
         return files
 
-    except Exception as e:
+    except subprocess.TimeoutExpired:
+        logger.warning("Git diff timed out getting changed files")
+        return []
+    except subprocess.SubprocessError as e:
+        logger.warning(f"Failed to get changed files: {e}")
+        return []
+    except OSError as e:
         logger.warning(f"Failed to get changed files: {e}")
         return []
 
@@ -165,7 +174,13 @@ def get_commit_messages(
         )
         return result.stdout.strip() if result.stdout.strip() else "(No commits)"
 
-    except Exception as e:
+    except subprocess.TimeoutExpired:
+        logger.warning("Git log timed out")
+        return "(Git log timed out)"
+    except subprocess.SubprocessError as e:
+        logger.warning(f"Failed to get commit messages: {e}")
+        return f"(Failed: {e})"
+    except OSError as e:
         logger.warning(f"Failed to get commit messages: {e}")
         return f"(Failed: {e})"
 
@@ -246,7 +261,10 @@ def _get_subtask_description(spec_dir: Path, subtask_id: str) -> str:
 
         return f"Subtask: {subtask_id}"
 
-    except Exception as e:
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse implementation plan: {e}")
+        return f"Subtask: {subtask_id}"
+    except OSError as e:
         logger.warning(f"Failed to load subtask description: {e}")
         return f"Subtask: {subtask_id}"
 
@@ -263,7 +281,7 @@ def _get_attempt_history(recovery_manager: Any, subtask_id: str) -> list[dict]:
         # Limit to recent attempts
         return attempts[-MAX_ATTEMPTS_TO_INCLUDE:]
 
-    except Exception as e:
+    except (AttributeError, KeyError, TypeError) as e:
         logger.warning(f"Failed to get attempt history: {e}")
         return []
 
@@ -397,7 +415,10 @@ async def run_insight_extraction(
         # Parse JSON from response
         return parse_insights(response_text)
 
-    except Exception as e:
+    except OSError as e:
+        logger.warning(f"Insight extraction failed: {e}")
+        return None
+    except RuntimeError as e:
         logger.warning(f"Insight extraction failed: {e}")
         return None
 
@@ -527,7 +548,10 @@ async def extract_session_insights(
             logger.warning("Extraction returned no results, using generic insights")
             return _get_generic_insights(subtask_id, success)
 
-    except Exception as e:
+    except OSError as e:
+        logger.warning(f"Insight extraction failed: {e}, using generic insights")
+        return _get_generic_insights(subtask_id, success)
+    except RuntimeError as e:
         logger.warning(f"Insight extraction failed: {e}, using generic insights")
         return _get_generic_insights(subtask_id, success)
 

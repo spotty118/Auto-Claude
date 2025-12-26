@@ -79,14 +79,14 @@ def create_claude_resolver() -> AIResolver:
                     logger.info(f"AI merge response: {len(response_text)} chars")
                     return response_text
 
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.error(f"Claude SDK call failed: {e}")
                 print(f"    [ERROR] Claude SDK error: {e}", file=sys.stderr)
                 return ""
 
         try:
             return asyncio.run(_run_merge())
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error(f"asyncio.run failed: {e}")
             print(f"    [ERROR] asyncio error: {e}", file=sys.stderr)
             return ""

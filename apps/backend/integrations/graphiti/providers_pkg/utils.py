@@ -59,6 +59,10 @@ async def get_graph_hints(
         logger.debug("Graphiti not enabled, returning empty hints")
         return []
 
+    # Track if we created a temp directory so we can clean it up
+    created_temp_dir = False
+    temp_dir_path = None
+
     try:
         from pathlib import Path
 
@@ -72,7 +76,9 @@ async def get_graph_hints(
             # Create a temporary spec dir for the query
             import tempfile
 
-            spec_dir = Path(tempfile.mkdtemp(prefix="graphiti_query_"))
+            temp_dir_path = Path(tempfile.mkdtemp(prefix="graphiti_query_"))
+            spec_dir = temp_dir_path
+            created_temp_dir = True
 
         # Create memory instance with project-level scope for cross-spec hints
         memory = GraphitiMemory(
@@ -96,6 +102,14 @@ async def get_graph_hints(
     except ImportError as e:
         logger.debug(f"Graphiti packages not available: {e}")
         return []
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.warning(f"Failed to get graph hints: {e}")
         return []
+    finally:
+        # BUGFIX: Clean up temporary directory to prevent disk space exhaustion
+        if created_temp_dir and temp_dir_path is not None:
+            import shutil
+            try:
+                shutil.rmtree(temp_dir_path, ignore_errors=True)
+            except OSError:
+                pass  # Best effort cleanup

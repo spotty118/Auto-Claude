@@ -78,7 +78,7 @@ class AutoMerger:
 
         try:
             return handler.execute(context)
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.exception(f"Auto-merge failed with strategy {strategy.value}")
             return MergeResult(
                 decision=MergeDecision.FAILED,

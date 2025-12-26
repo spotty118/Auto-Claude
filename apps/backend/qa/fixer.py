@@ -250,7 +250,7 @@ async def run_qa_fixer_session(
             debug_success("qa_fixer", "Fixes assumed applied (status not updated)")
             return "fixed", response_text
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         debug_error(
             "qa_fixer",
             f"Fixer session exception: {e}",

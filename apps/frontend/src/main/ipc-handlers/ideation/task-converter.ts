@@ -64,6 +64,33 @@ function buildTaskDescription(idea: RawIdea): string {
     if (idea.affected_components?.length) {
       description += `## Affected Components\n${idea.affected_components.map((c: string) => `- ${c}`).join('\n')}\n\n`;
     }
+  } else if (idea.type === 'bug_finder') {
+    if (idea.bug_pattern) {
+      description += `## Bug Pattern\n${idea.bug_pattern}\n\n`;
+    }
+    if (idea.trigger_condition) {
+      description += `## Trigger Condition\n${idea.trigger_condition}\n\n`;
+    }
+    if (idea.expected_behavior) {
+      description += `## Expected Behavior\n${idea.expected_behavior}\n\n`;
+    }
+    if (idea.actual_behavior) {
+      description += `## Actual Behavior\n${idea.actual_behavior}\n\n`;
+    }
+    const reproSteps = idea.repro_steps || idea.reproSteps || [];
+    if (Array.isArray(reproSteps) && reproSteps.length > 0) {
+      description += `## Reproduction Steps\n${reproSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}\n\n`;
+    }
+    if (idea.suggested_fix) {
+      description += `## Suggested Fix\n${idea.suggested_fix}\n\n`;
+    }
+    const affectedFiles = idea.affected_files || [];
+    if (Array.isArray(affectedFiles) && affectedFiles.length > 0) {
+      description += `## Affected Files\n${affectedFiles.map((f: string) => `- ${f}`).join('\n')}\n\n`;
+    }
+    if (idea.confidence) {
+      description += `## Confidence\n${idea.confidence}\n\n`;
+    }
   }
 
   return description;
@@ -87,7 +114,8 @@ function buildTaskMetadata(idea: RawIdea): TaskMetadata {
     'documentation_gaps': 'documentation',
     'security_hardening': 'security',
     'performance_optimizations': 'performance',
-    'code_quality': 'refactoring'
+    'code_quality': 'refactoring',
+    'bug_finder': 'bug_fix'
   };
   metadata.category = ideaTypeToCategory[idea.type] || 'feature';
 
@@ -123,6 +151,17 @@ function buildTaskMetadata(idea: RawIdea): TaskMetadata {
     metadata.estimatedEffort = idea.estimated_effort as TaskComplexity | undefined;
     metadata.affectedFiles = idea.affected_files;
     metadata.priority = severity === 'critical' ? 'urgent' : severity === 'major' ? 'high' : 'medium';
+  } else if (idea.type === 'bug_finder') {
+    metadata.bugPattern = idea.bug_pattern;
+    metadata.triggerCondition = idea.trigger_condition;
+    metadata.expectedBehavior = idea.expected_behavior;
+    metadata.actualBehavior = idea.actual_behavior;
+    metadata.reproSteps = idea.repro_steps || idea.reproSteps;
+    metadata.suggestedFix = idea.suggested_fix;
+    metadata.affectedFiles = idea.affected_files;
+    // Map confidence to priority
+    const confidence = idea.confidence as 'low' | 'medium' | 'high' | undefined;
+    metadata.priority = confidence === 'high' ? 'high' : confidence === 'medium' ? 'medium' : 'low';
   }
 
   return metadata;

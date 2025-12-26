@@ -86,7 +86,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                 ]
             }
 
-        except Exception as e:
+        except OSError as e:
             return {
                 "content": [{"type": "text", "text": f"Error recording discovery: {e}"}]
             }
@@ -128,7 +128,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
 
             return {"content": [{"type": "text", "text": f"Recorded gotcha: {gotcha}"}]}
 
-        except Exception as e:
+        except OSError as e:
             return {
                 "content": [{"type": "text", "text": f"Error recording gotcha: {e}"}]
             }
@@ -172,7 +172,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     for path, info in list(discoveries.items())[:20]:  # Limit to 20
                         desc = info.get("description", "No description")
                         result_parts.append(f"- `{path}`: {desc}")
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 pass
 
         # Load gotchas
@@ -186,7 +186,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     result_parts.append(
                         content[-1000:] if len(content) > 1000 else content
                     )
-            except Exception:
+            except OSError:
                 pass
 
         # Load patterns
@@ -199,7 +199,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     result_parts.append(
                         content[-1000:] if len(content) > 1000 else content
                     )
-            except Exception:
+            except OSError:
                 pass
 
         if not result_parts:

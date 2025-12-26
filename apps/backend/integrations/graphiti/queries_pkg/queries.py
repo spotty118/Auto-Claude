@@ -80,7 +80,7 @@ class GraphitiQueries:
             )
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to save session insights: {e}")
             return False
 
@@ -122,7 +122,7 @@ class GraphitiQueries:
             logger.info(f"Saved {len(discoveries)} codebase discoveries to Graphiti")
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to save codebase discoveries: {e}")
             return False
 
@@ -158,7 +158,7 @@ class GraphitiQueries:
             logger.info(f"Saved pattern to Graphiti: {pattern[:50]}...")
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to save pattern: {e}")
             return False
 
@@ -194,7 +194,7 @@ class GraphitiQueries:
             logger.info(f"Saved gotcha to Graphiti: {gotcha[:50]}...")
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to save gotcha: {e}")
             return False
 
@@ -243,7 +243,7 @@ class GraphitiQueries:
             logger.info(f"Saved task outcome to Graphiti: {task_id} {status}")
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to save task outcome: {e}")
             return False
 
@@ -290,7 +290,7 @@ class GraphitiQueries:
                         group_id=self.group_id,
                     )
                     saved_count += 1
-                except Exception as e:
+                except RuntimeError as e:
                     if "duplicate_facts" in str(e):
                         logger.debug(f"Graphiti deduplication warning (non-fatal): {e}")
                         saved_count += 1
@@ -333,7 +333,7 @@ class GraphitiQueries:
                         group_id=self.group_id,
                     )
                     saved_count += 1
-                except Exception as e:
+                except RuntimeError as e:
                     if "duplicate_facts" in str(e):
                         logger.debug(f"Graphiti deduplication warning (non-fatal): {e}")
                         saved_count += 1
@@ -374,7 +374,7 @@ class GraphitiQueries:
                         group_id=self.group_id,
                     )
                     saved_count += 1
-                except Exception as e:
+                except RuntimeError as e:
                     if "duplicate_facts" in str(e):
                         logger.debug(f"Graphiti deduplication warning (non-fatal): {e}")
                         saved_count += 1
@@ -411,7 +411,7 @@ class GraphitiQueries:
                         group_id=self.group_id,
                     )
                     saved_count += 1
-                except Exception as e:
+                except RuntimeError as e:
                     # Graphiti deduplication can fail with "invalid duplicate_facts idx"
                     # This is a known issue in graphiti-core - episode is still partially saved
                     if "duplicate_facts" in str(e):
@@ -444,7 +444,7 @@ class GraphitiQueries:
                         group_id=self.group_id,
                     )
                     saved_count += 1
-                except Exception as e:
+                except RuntimeError as e:
                     if "duplicate_facts" in str(e):
                         logger.debug(f"Graphiti deduplication warning (non-fatal): {e}")
                         saved_count += 1
@@ -457,6 +457,6 @@ class GraphitiQueries:
             )
             return saved_count > 0
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to save structured insights: {e}")
             return False

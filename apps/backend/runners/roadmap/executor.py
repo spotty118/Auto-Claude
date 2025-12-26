@@ -58,8 +58,11 @@ class ScriptExecutor:
         except subprocess.TimeoutExpired:
             debug_error("roadmap_executor", f"Script timed out: {script}")
             return False, "Script timed out"
-        except Exception as e:
-            debug_error("roadmap_executor", f"Script exception: {script}", error=str(e))
+        except subprocess.SubprocessError as e:
+            debug_error("roadmap_executor", f"Script subprocess error: {script}", error=str(e))
+            return False, str(e)
+        except OSError as e:
+            debug_error("roadmap_executor", f"Script OS error: {script}", error=str(e))
             return False, str(e)
 
 
@@ -165,8 +168,13 @@ class AgentExecutor:
                 )
                 return True, response_text
 
-        except Exception as e:
+        except OSError as e:
             debug_error(
-                "roadmap_executor", f"Agent failed: {prompt_file}", error=str(e)
+                "roadmap_executor", f"Agent OS error: {prompt_file}", error=str(e)
+            )
+            return False, str(e)
+        except RuntimeError as e:
+            debug_error(
+                "roadmap_executor", f"Agent runtime error: {prompt_file}", error=str(e)
             )
             return False, str(e)

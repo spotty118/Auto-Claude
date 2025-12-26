@@ -85,7 +85,9 @@ def run_context_discovery(
 
     except subprocess.TimeoutExpired:
         return False, "Script timed out"
-    except Exception as e:
+    except subprocess.SubprocessError as e:
+        return False, str(e)
+    except OSError as e:
         return False, str(e)
 
 
@@ -124,5 +126,5 @@ def get_context_stats(spec_dir: Path) -> dict:
             "files_to_modify": len(ctx.get("files_to_modify", [])),
             "files_to_reference": len(ctx.get("files_to_reference", [])),
         }
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {}

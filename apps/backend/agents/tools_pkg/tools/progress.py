@@ -130,7 +130,7 @@ Next subtask to work on:
 
             return {"content": [{"type": "text", "text": result}]}
 
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, KeyError) as e:
             return {
                 "content": [
                     {"type": "text", "text": f"Error reading build progress: {e}"}

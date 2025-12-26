@@ -71,7 +71,7 @@ class EvolutionStorage:
             logger.debug(f"Loaded evolution data for {len(evolutions)} files")
             return evolutions
 
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             logger.error(f"Failed to load evolution data: {e}")
             return {}
 
@@ -93,7 +93,7 @@ class EvolutionStorage:
 
             logger.debug(f"Saved evolution data for {len(evolutions)} files")
 
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to save evolution data: {e}")
 
     def store_baseline_content(
@@ -140,7 +140,7 @@ class EvolutionStorage:
                 return baseline_path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 return baseline_path.read_text(encoding="utf-8", errors="replace")
-            except Exception as e:
+            except OSError as e:
                 logger.warning(f"Could not read baseline {baseline_snapshot_path}: {e}")
         return None
 
@@ -161,7 +161,7 @@ class EvolutionStorage:
             return path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             return path.read_text(encoding="utf-8", errors="replace")
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"Could not read {file_path}: {e}")
             return None
 

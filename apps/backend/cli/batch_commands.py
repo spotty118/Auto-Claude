@@ -31,8 +31,8 @@ def handle_batch_create_command(batch_file: str, project_dir: str) -> bool:
     try:
         with open(batch_path) as f:
             batch_data = json.load(f)
-    except json.JSONDecodeError as e:
-        print_status(f"Invalid JSON in batch file: {e}", "error")
+    except (OSError, json.JSONDecodeError) as e:
+        print_status(f"Failed to read batch file: {e}", "error")
         return False
 
     tasks = batch_data.get("tasks", [])
@@ -146,7 +146,7 @@ def handle_batch_status_command(project_dir: str) -> bool:
                 with open(req_file) as f:
                     req = json.load(f)
                     title = req.get("task_description", title)
-            except json.JSONDecodeError:
+            except (OSError, json.JSONDecodeError):
                 pass
 
         # Determine status

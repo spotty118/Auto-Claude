@@ -95,7 +95,7 @@ def get_db_connection(db_path: str, database: str):
         db = kuzu.Database(str(full_path))
         conn = kuzu.Connection(db)
         return conn, None
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         return None, str(e)
 
 
@@ -141,7 +141,7 @@ def cmd_get_status(args):
             # Test query
             result = conn.execute("RETURN 1 as test")
             _ = result.get_as_df()
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             connected = False
             error = str(e)
 
@@ -210,7 +210,7 @@ def cmd_get_memories(args):
 
         output_json(True, data={"memories": memories, "count": len(memories)})
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         # Table might not exist yet
         if "Episodic" in str(e) and (
             "not exist" in str(e).lower() or "cannot" in str(e).lower()
@@ -279,7 +279,7 @@ def cmd_search(args):
             data={"memories": memories, "count": len(memories), "query": args.query},
         )
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         if "Episodic" in str(e) and (
             "not exist" in str(e).lower() or "cannot" in str(e).lower()
         ):
@@ -312,7 +312,7 @@ def cmd_semantic_search(args):
         else:
             # Semantic search failed, fall back to keyword search
             return cmd_search(args)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         # Any error, fall back to keyword search
         sys.stderr.write(f"Semantic search failed, falling back to keyword: {e}\n")
         return cmd_search(args)
@@ -433,7 +433,7 @@ async def _async_semantic_search(args):
 
     except ImportError as e:
         return {"success": False, "error": f"Missing dependencies: {e}"}
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         return {"success": False, "error": f"Semantic search failed: {e}"}
 
 
@@ -479,7 +479,7 @@ def cmd_get_entities(args):
 
         output_json(True, data={"entities": entities, "count": len(entities)})
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         if "Entity" in str(e) and (
             "not exist" in str(e).lower() or "cannot" in str(e).lower()
         ):

@@ -70,6 +70,22 @@ export interface RawIdea extends Record<string, unknown> {
   breakingChange?: boolean;
   prerequisites?: string[];
 
+  // Bug finder specific
+  bug_pattern?: string;
+  bugPattern?: string;
+  trigger_condition?: string;
+  triggerCondition?: string;
+  expected_behavior?: string;
+  expectedBehavior?: string;
+  actual_behavior?: string;
+  actualBehavior?: string;
+  repro_steps?: string[];
+  reproSteps?: string[];
+  suggested_fix?: string;
+  suggestedFix?: string;
+  confidence?: string;
+  testability?: string;
+
   // Linked task
   linked_task_id?: string;
 }

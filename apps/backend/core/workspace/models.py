@@ -62,6 +62,11 @@ class MergeLock:
 
     Uses a lock file in .auto-claude/ to ensure only one merge operation
     runs at a time for a given project.
+
+    Security Notes:
+    - Uses atomic O_EXCL file creation to prevent race conditions
+    - Avoids TOCTOU by not checking existence before operations
+    - Uses exception handling instead of existence checks
     """
 
     def __init__(self, project_dir: Path, spec_name: str):
@@ -70,6 +75,49 @@ class MergeLock:
         self.lock_dir = project_dir / ".auto-claude" / ".locks"
         self.lock_file = self.lock_dir / f"merge-{spec_name}.lock"
         self.acquired = False
+
+    def _is_process_running(self, pid: int) -> bool:
+        """Check if a process is running (without TOCTOU)."""
+        import os
+
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+    def _try_cleanup_stale_lock(self) -> bool:
+        """
+        Try to clean up a stale lock file atomically.
+
+        Returns True if lock was cleaned up (caller should retry).
+        Returns False if lock is held by a running process.
+        """
+        try:
+            # Read PID in one operation - if file disappears, we get an exception
+            pid_str = self.lock_file.read_text().strip()
+            pid = int(pid_str)
+
+            if not self._is_process_running(pid):
+                # Stale lock - try to remove it atomically
+                try:
+                    self.lock_file.unlink()
+                    return True
+                except FileNotFoundError:
+                    # Another process already removed it - retry lock acquisition
+                    return True
+
+            # Process is running - lock is valid
+            return False
+
+        except (FileNotFoundError, ValueError, PermissionError):
+            # File gone, invalid content, or permission issue
+            # Try to remove and retry
+            try:
+                self.lock_file.unlink()
+            except FileNotFoundError:
+                pass
+            return True
 
     def __enter__(self):
         """Acquire the merge lock."""
@@ -80,11 +128,11 @@ class MergeLock:
 
         # Try to acquire lock with timeout
         max_wait = 30  # seconds
-        start_time = time.time()
+        start_time = time.monotonic()  # Use monotonic clock to avoid clock skew issues
 
         while True:
             try:
-                # Try to create lock file exclusively
+                # Try to create lock file exclusively (atomic)
                 fd = os.open(
                     str(self.lock_file),
                     os.O_CREAT | os.O_EXCL | os.O_WRONLY,
@@ -93,35 +141,17 @@ class MergeLock:
                 os.close(fd)
 
                 # Write our PID to the lock file
-                self.lock_file.write_text(str(os.getpid()))
+                self.lock_file.write_text(str(os.getpid()), encoding="utf-8")
                 self.acquired = True
                 return self
 
             except FileExistsError:
-                # Lock file exists - check if process is still running
-                if self.lock_file.exists():
-                    try:
-                        pid = int(self.lock_file.read_text().strip())
-                        # Import locally to avoid circular dependency
-                        import os as _os
-
-                        try:
-                            _os.kill(pid, 0)
-                            is_running = True
-                        except (OSError, ProcessLookupError):
-                            is_running = False
-
-                        if not is_running:
-                            # Stale lock - remove it
-                            self.lock_file.unlink()
-                            continue
-                    except (ValueError, ProcessLookupError):
-                        # Invalid PID or can't check - remove stale lock
-                        self.lock_file.unlink()
-                        continue
+                # Lock file exists - try to clean up if stale
+                if self._try_cleanup_stale_lock():
+                    continue  # Retry lock acquisition
 
                 # Active lock - wait or timeout
-                if time.time() - start_time >= max_wait:
+                if time.monotonic() - start_time >= max_wait:
                     raise MergeLockError(
                         f"Could not acquire merge lock for {self.spec_name} after {max_wait}s"
                     )
@@ -130,10 +160,12 @@ class MergeLock:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Release the merge lock."""
-        if self.acquired and self.lock_file.exists():
+        if self.acquired:
             try:
                 self.lock_file.unlink()
-            except Exception:
+            except FileNotFoundError:
+                pass  # Already removed (shouldn't happen but be safe)
+            except OSError:
                 pass  # Best effort cleanup
 
 
@@ -153,6 +185,11 @@ class SpecNumberLock:
     3. Finding global maximum spec number
     4. Allowing atomic spec directory creation
     5. Releasing lock
+
+    Security Notes:
+    - Uses atomic O_EXCL file creation to prevent race conditions
+    - Avoids TOCTOU by not checking existence before operations
+    - Uses exception handling instead of existence checks
     """
 
     def __init__(self, project_dir: Path):
@@ -162,6 +199,49 @@ class SpecNumberLock:
         self.acquired = False
         self._global_max: int | None = None
 
+    def _is_process_running(self, pid: int) -> bool:
+        """Check if a process is running (without TOCTOU)."""
+        import os
+
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+    def _try_cleanup_stale_lock(self) -> bool:
+        """
+        Try to clean up a stale lock file atomically.
+
+        Returns True if lock was cleaned up (caller should retry).
+        Returns False if lock is held by a running process.
+        """
+        try:
+            # Read PID in one operation - if file disappears, we get an exception
+            pid_str = self.lock_file.read_text().strip()
+            pid = int(pid_str)
+
+            if not self._is_process_running(pid):
+                # Stale lock - try to remove it atomically
+                try:
+                    self.lock_file.unlink()
+                    return True
+                except FileNotFoundError:
+                    # Another process already removed it - retry lock acquisition
+                    return True
+
+            # Process is running - lock is valid
+            return False
+
+        except (FileNotFoundError, ValueError, PermissionError):
+            # File gone, invalid content, or permission issue
+            # Try to remove and retry
+            try:
+                self.lock_file.unlink()
+            except FileNotFoundError:
+                pass
+            return True
+
     def __enter__(self) -> "SpecNumberLock":
         """Acquire the spec numbering lock."""
         import os
@@ -170,7 +250,7 @@ class SpecNumberLock:
         self.lock_dir.mkdir(parents=True, exist_ok=True)
 
         max_wait = 30  # seconds
-        start_time = time.time()
+        start_time = time.monotonic()  # Use monotonic clock to avoid clock skew issues
 
         while True:
             try:
@@ -183,34 +263,17 @@ class SpecNumberLock:
                 os.close(fd)
 
                 # Write our PID to the lock file
-                self.lock_file.write_text(str(os.getpid()))
+                self.lock_file.write_text(str(os.getpid()), encoding="utf-8")
                 self.acquired = True
                 return self
 
             except FileExistsError:
-                # Lock file exists - check if process is still running
-                if self.lock_file.exists():
-                    try:
-                        pid = int(self.lock_file.read_text().strip())
-                        import os as _os
-
-                        try:
-                            _os.kill(pid, 0)
-                            is_running = True
-                        except (OSError, ProcessLookupError):
-                            is_running = False
-
-                        if not is_running:
-                            # Stale lock - remove it
-                            self.lock_file.unlink()
-                            continue
-                    except (ValueError, ProcessLookupError):
-                        # Invalid PID or can't check - remove stale lock
-                        self.lock_file.unlink()
-                        continue
+                # Lock file exists - try to clean up if stale
+                if self._try_cleanup_stale_lock():
+                    continue  # Retry lock acquisition
 
                 # Active lock - wait or timeout
-                if time.time() - start_time >= max_wait:
+                if time.monotonic() - start_time >= max_wait:
                     raise SpecNumberLockError(
                         f"Could not acquire spec numbering lock after {max_wait}s"
                     )
@@ -219,10 +282,12 @@ class SpecNumberLock:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Release the spec numbering lock."""
-        if self.acquired and self.lock_file.exists():
+        if self.acquired:
             try:
                 self.lock_file.unlink()
-            except Exception:
+            except FileNotFoundError:
+                pass  # Already removed (shouldn't happen but be safe)
+            except OSError:
                 pass  # Best effort cleanup
 
     def get_next_spec_number(self) -> int:

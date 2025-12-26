@@ -147,7 +147,7 @@ def collect_followup_task(spec_dir: Path, max_retries: int = 3) -> str | None:
                 print(muted("  Check file permissions and try again."))
                 retry_count += 1
                 continue
-            except Exception as e:
+            except OSError as e:
                 print_status(f"Error reading file: {e}", "error")
                 retry_count += 1
                 continue
@@ -293,7 +293,7 @@ def handle_followup_command(
             phase_name = phase.get("name", "")
             if "follow" in phase_name.lower() or "followup" in phase_name.lower():
                 prior_followup_count += 1
-    except (json.JSONDecodeError, KeyError):
+    except (OSError, json.JSONDecodeError, KeyError):
         pass  # If plan parsing fails, just continue without prior count
 
     # Build is complete - proceed to follow-up workflow
@@ -365,7 +365,7 @@ def handle_followup_command(
         print("\n\nFollow-up planning paused.")
         print(f"To retry: python auto-claude/run.py --spec {spec_dir.name} --followup")
         sys.exit(0)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print()
         print(error(f"{icon(Icons.ERROR)} Follow-up planning error: {e}"))
         if verbose:

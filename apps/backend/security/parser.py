@@ -4,11 +4,41 @@ Command Parsing Utilities
 
 Functions for parsing and extracting commands from shell command strings.
 Handles compound commands, pipes, subshells, and various shell constructs.
+
+SECURITY: This module includes critical protections against command injection
+via shell substitution patterns ($(), backticks, ${}).
 """
 
 import os
 import re
 import shlex
+
+
+# SECURITY: Patterns that indicate command substitution or variable expansion
+# These MUST be blocked to prevent allowlist bypass attacks
+# - $() : Modern command substitution
+# - `` : Legacy backtick command substitution
+# - ${} : Variable expansion (can execute via ${var:-$(cmd)})
+COMMAND_SUBSTITUTION_PATTERN = re.compile(r'\$\(|`|\$\{')
+
+
+def contains_dangerous_substitution(command: str) -> bool:
+    """
+    Check if command contains shell substitution patterns that could bypass security.
+    
+    These patterns allow arbitrary command execution regardless of the command
+    that appears to be run. For example:
+        echo $(rm -rf /)  # Looks like 'echo' but executes 'rm'
+        echo `whoami`     # Executes whoami via backtick substitution
+        echo ${PATH}      # Leaks environment variables
+    
+    Args:
+        command: The full command string to check
+        
+    Returns:
+        True if dangerous patterns are detected, False otherwise
+    """
+    return bool(COMMAND_SUBSTITUTION_PATTERN.search(command))
 
 
 def split_command_segments(command_string: str) -> list[str]:
@@ -38,7 +68,15 @@ def extract_commands(command_string: str) -> list[str]:
 
     Handles pipes, command chaining (&&, ||, ;), and subshells.
     Returns the base command names (without paths).
+    
+    SECURITY: Blocks command substitution patterns before parsing to prevent
+    allowlist bypass attacks.
     """
+    # SECURITY: Block command substitution patterns FIRST
+    # This prevents attacks like: echo $(malicious_command)
+    if contains_dangerous_substitution(command_string):
+        return []  # Fail-safe: block the entire command
+
     commands = []
 
     # Split on semicolons that aren't inside quotes

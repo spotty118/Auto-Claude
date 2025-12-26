@@ -15,6 +15,8 @@ Exit codes:
     2 - Error occurred during scanning
 """
 
+from __future__ import annotations
+
 import argparse
 import re
 import subprocess
@@ -190,6 +192,8 @@ DEFAULT_IGNORE_PATTERNS = [
     r"poetry\.lock$",
 ]
 
+DOC_IGNORE_PATTERNS = {r"\.md$", r"\.rst$", r"\.txt$"}
+
 # Binary file extensions to skip
 BINARY_EXTENSIONS = {
     ".png",
@@ -255,6 +259,9 @@ FALSE_POSITIVE_PATTERNS = [
 # CORE FUNCTIONS
 # =============================================================================
 
+# Subprocess timeout for git commands
+GIT_TIMEOUT = 30
+
 
 def load_secretsignore(project_dir: Path) -> list[str]:
     """Load custom ignore patterns from .secretsignore file."""
@@ -276,7 +283,9 @@ def load_secretsignore(project_dir: Path) -> list[str]:
     return patterns
 
 
-def should_skip_file(file_path: str, custom_ignores: list[str]) -> bool:
+def should_skip_file(
+    file_path: str, custom_ignores: list[str], include_docs: bool = False
+) -> bool:
     """Check if a file should be skipped based on ignore patterns."""
     path = Path(file_path)
 
@@ -286,6 +295,8 @@ def should_skip_file(file_path: str, custom_ignores: list[str]) -> bool:
 
     # Check default ignore patterns
     for pattern in DEFAULT_IGNORE_PATTERNS:
+        if include_docs and pattern in DOC_IGNORE_PATTERNS:
+            continue
         if re.search(pattern, file_path):
             return True
 
@@ -369,10 +380,15 @@ def get_staged_files() -> list[str]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=GIT_TIMEOUT,
         )
         files = [f.strip() for f in result.stdout.splitlines() if f.strip()]
         return files
+    except subprocess.TimeoutExpired:
+        return []
     except subprocess.CalledProcessError:
+        return []
+    except subprocess.SubprocessError:
         return []
 
 
@@ -384,16 +400,22 @@ def get_all_tracked_files() -> list[str]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=GIT_TIMEOUT,
         )
         files = [f.strip() for f in result.stdout.splitlines() if f.strip()]
         return files
+    except subprocess.TimeoutExpired:
+        return []
     except subprocess.CalledProcessError:
+        return []
+    except subprocess.SubprocessError:
         return []
 
 
 def scan_files(
     files: list[str],
     project_dir: Path | None = None,
+    include_docs: bool = False,
 ) -> list[SecretMatch]:
     """Scan a list of files for secrets."""
     if project_dir is None:
@@ -404,7 +426,7 @@ def scan_files(
 
     for file_path in files:
         # Skip files based on ignore patterns
-        if should_skip_file(file_path, custom_ignores):
+        if should_skip_file(file_path, custom_ignores, include_docs=include_docs):
             continue
 
         full_path = project_dir / file_path
@@ -514,6 +536,11 @@ def main() -> int:
     parser.add_argument(
         "--quiet", "-q", action="store_true", help="Only output if secrets are found"
     )
+    parser.add_argument(
+        "--include-docs",
+        action="store_true",
+        help="Include documentation files (.md/.rst/.txt) in scanning",
+    )
 
     args = parser.parse_args()
 
@@ -545,7 +572,7 @@ def main() -> int:
         print(f"Scanning {len(files)} file(s) for secrets...")
 
     # Scan files
-    matches = scan_files(files, project_dir)
+    matches = scan_files(files, project_dir, include_docs=args.include_docs)
 
     # Output results
     if args.json:

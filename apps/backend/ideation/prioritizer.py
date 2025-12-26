@@ -97,13 +97,15 @@ class IdeaPrioritizer:
                     "count": 0,
                 }
 
-        except json.JSONDecodeError as e:
+        except (OSError, json.JSONDecodeError) as e:
             debug_error("ideation_prioritizer", "JSON parse error", error=str(e))
+            try:
+                current = output_file.read_text() if output_file.exists() else ""
+            except OSError:
+                current = ""
             return {
                 "success": False,
-                "error": f"Invalid JSON: {e}",
-                "current_content": output_file.read_text()
-                if output_file.exists()
-                else "",
+                "error": f"Failed to read/parse JSON: {e}",
+                "current_content": current,
                 "count": 0,
             }

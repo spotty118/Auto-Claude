@@ -28,6 +28,7 @@ IDEATION_TYPES = [
     "security_hardening",
     "performance_optimizations",
     "code_quality",
+    "bug_finder",
 ]
 
 IDEATION_TYPE_LABELS = {
@@ -37,6 +38,7 @@ IDEATION_TYPE_LABELS = {
     "security_hardening": "Security Hardening",
     "performance_optimizations": "Performance Optimizations",
     "code_quality": "Code Quality & Refactoring",
+    "bug_finder": "Bug Finder",
 }
 
 IDEATION_TYPE_PROMPTS = {
@@ -46,6 +48,7 @@ IDEATION_TYPE_PROMPTS = {
     "security_hardening": "ideation_security.md",
     "performance_optimizations": "ideation_performance.md",
     "code_quality": "ideation_code_quality.md",
+    "bug_finder": "ideation_bug_finder.md",
 }
 
 
@@ -120,7 +123,7 @@ class IdeationGenerator:
                 print()
                 return True, response_text
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             return False, str(e)
 
     async def run_recovery_agent(
@@ -211,7 +214,7 @@ Write the fixed JSON to the file now.
                 print()
                 return True
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             print_status(f"Recovery agent error: {e}", "error")
             return False
 

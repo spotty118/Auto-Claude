@@ -19,6 +19,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Git command timeouts (seconds)
+GIT_TIMEOUT_SHORT = 10   # Simple queries (rev-parse, log -1)
+GIT_TIMEOUT_MEDIUM = 30  # Diffs and larger operations
+
 # Import debug utilities
 try:
     from debug import debug, debug_error, debug_warning
@@ -62,9 +66,12 @@ class TimelineGitHelper:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError:
+            return "unknown"
+        except subprocess.TimeoutExpired:
             return "unknown"
 
     def get_file_content_at_commit(
@@ -86,11 +93,16 @@ class TimelineGitHelper:
                 cwd=self.project_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             if result.returncode == 0:
                 return result.stdout
             return None
-        except Exception:
+        except subprocess.TimeoutExpired:
+            return None
+        except subprocess.SubprocessError:
+            return None
+        except OSError:
             return None
 
     def get_files_changed_in_commit(self, commit_hash: str) -> list[str]:
@@ -117,9 +129,12 @@ class TimelineGitHelper:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             return [f for f in result.stdout.strip().split("\n") if f]
         except subprocess.CalledProcessError:
+            return []
+        except subprocess.TimeoutExpired:
             return []
 
     def get_commit_info(self, commit_hash: str) -> dict:
@@ -140,6 +155,7 @@ class TimelineGitHelper:
                 cwd=self.project_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             if result.returncode == 0:
                 info["message"] = result.stdout.strip()
@@ -150,6 +166,7 @@ class TimelineGitHelper:
                 cwd=self.project_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             if result.returncode == 0:
                 info["author"] = result.stdout.strip()
@@ -160,6 +177,7 @@ class TimelineGitHelper:
                 cwd=self.project_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             if result.returncode == 0:
                 info["diff_summary"] = (
@@ -168,7 +186,11 @@ class TimelineGitHelper:
                     else None
                 )
 
-        except Exception:
+        except subprocess.TimeoutExpired:
+            pass
+        except subprocess.SubprocessError:
+            pass
+        except OSError:
             pass
 
         return info
@@ -219,6 +241,7 @@ class TimelineGitHelper:
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
 
             if result.returncode != 0:
@@ -226,7 +249,13 @@ class TimelineGitHelper:
 
             return [f for f in result.stdout.strip().split("\n") if f]
 
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout getting changed files in worktree")
+            return []
+        except subprocess.SubprocessError as e:
+            logger.error(f"Failed to get changed files in worktree: {e}")
+            return []
+        except OSError as e:
             logger.error(f"Failed to get changed files in worktree: {e}")
             return []
 
@@ -252,6 +281,7 @@ class TimelineGitHelper:
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
 
             if result.returncode != 0:
@@ -263,7 +293,13 @@ class TimelineGitHelper:
 
             return result.stdout.strip()
 
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout getting branch point")
+            return None
+        except subprocess.SubprocessError as e:
+            logger.error(f"Failed to get branch point: {e}")
+            return None
+        except OSError as e:
             logger.error(f"Failed to get branch point: {e}")
             return None
 
@@ -284,6 +320,7 @@ class TimelineGitHelper:
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             if result.returncode == 0 and result.stdout.strip():
                 upstream = result.stdout.strip()
@@ -291,7 +328,11 @@ class TimelineGitHelper:
                 if "/" in upstream:
                     return upstream.split("/", 1)[1]
                 return upstream
-        except Exception:
+        except subprocess.TimeoutExpired:
+            pass
+        except subprocess.SubprocessError:
+            pass
+        except OSError:
             pass
 
         # Try common branch names and find which one has a valid merge-base
@@ -302,10 +343,15 @@ class TimelineGitHelper:
                     cwd=worktree_path,
                     capture_output=True,
                     text=True,
+                    timeout=GIT_TIMEOUT_SHORT,
                 )
                 if result.returncode == 0:
                     return branch
-            except Exception:
+            except subprocess.TimeoutExpired:
+                continue
+            except subprocess.SubprocessError:
+                continue
+            except OSError:
                 continue
 
         # Default to main
@@ -328,12 +374,19 @@ class TimelineGitHelper:
                 cwd=self.project_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
 
             if result.returncode == 0:
                 return int(result.stdout.strip())
 
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            logger.error("Timeout counting commits")
+        except subprocess.SubprocessError as e:
+            logger.error(f"Failed to count commits: {e}")
+        except ValueError:
+            logger.error("Invalid commit count output")
+        except OSError as e:
             logger.error(f"Failed to count commits: {e}")
 
         return 0

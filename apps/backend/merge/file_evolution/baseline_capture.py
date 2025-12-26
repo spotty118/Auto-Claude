@@ -33,6 +33,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 MODULE = "merge.file_evolution.baseline_capture"
 
+# Subprocess timeout constants
+GIT_TIMEOUT_SHORT = 10  # Simple git queries (ls-files, rev-parse)
+
 
 # Default extensions to track for baselines
 DEFAULT_EXTENSIONS = {
@@ -99,6 +102,7 @@ class BaselineCapture:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             all_files = result.stdout.strip().split("\n")
             trackable = []
@@ -112,8 +116,14 @@ class BaselineCapture:
 
             return trackable
 
+        except subprocess.TimeoutExpired:
+            logger.warning("Git ls-files timed out, returning empty list")
+            return []
         except subprocess.CalledProcessError:
             logger.warning("Failed to list git files, returning empty list")
+            return []
+        except subprocess.SubprocessError as e:
+            logger.warning(f"Subprocess error listing git files: {e}")
             return []
 
     def get_current_commit(self) -> str:
@@ -130,9 +140,14 @@ class BaselineCapture:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            return "unknown"
         except subprocess.CalledProcessError:
+            return "unknown"
+        except subprocess.SubprocessError:
             return "unknown"
 
     def capture_baselines(

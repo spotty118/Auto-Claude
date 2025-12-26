@@ -14,7 +14,8 @@ import {
   isDocumentationGapIdea,
   isSecurityHardeningIdea,
   isPerformanceOptimizationIdea,
-  isCodeQualityIdea
+  isCodeQualityIdea,
+  isBugFinderIdea
 } from './type-guards';
 import { CodeImprovementDetails } from './details/CodeImprovementDetails';
 import { UIUXDetails } from './details/UIUXDetails';
@@ -22,6 +23,7 @@ import { DocumentationGapDetails } from './details/DocumentationGapDetails';
 import { SecurityHardeningDetails } from './details/SecurityHardeningDetails';
 import { PerformanceOptimizationDetails } from './details/PerformanceOptimizationDetails';
 import { CodeQualityDetails } from './details/CodeQualityDetails';
+import { BugFinderDetails } from './details/BugFinderDetails';
 
 interface IdeaDetailPanelProps {
   idea: Idea;
@@ -84,6 +86,7 @@ export function IdeaDetailPanel({ idea, onClose, onConvert, onGoToTask, onDismis
         {isSecurityHardeningIdea(idea) && <SecurityHardeningDetails idea={idea} />}
         {isPerformanceOptimizationIdea(idea) && <PerformanceOptimizationDetails idea={idea} />}
         {isCodeQualityIdea(idea) && <CodeQualityDetails idea={idea} />}
+        {isBugFinderIdea(idea) && <BugFinderDetails idea={idea} />}
       </div>
 
       {/* Actions */}

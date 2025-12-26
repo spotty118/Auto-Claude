@@ -76,7 +76,7 @@ class EmbeddingMigrator:
             if not await self.source_client.initialize():
                 logger.error("Failed to initialize source client")
                 return False
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error(f"Exception initializing source client: {e}")
             return False
 
@@ -90,7 +90,7 @@ class EmbeddingMigrator:
                     await self.source_client.close()
                     self.source_client = None
                     return False
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.error(f"Exception initializing target client: {e}")
                 # Clean up source client on partial failure
                 await self.source_client.close()
@@ -144,7 +144,7 @@ class EmbeddingMigrator:
             logger.info(f"Found {len(episodes)} episodes to migrate")
             return episodes
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error(f"Failed to fetch episodes: {e}")
             return []
 
@@ -194,7 +194,7 @@ class EmbeddingMigrator:
             logger.info(f"Migrated: {episode['name']}")
             return True
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Failed to migrate episode {episode['name']}: {e}")
             return False
 

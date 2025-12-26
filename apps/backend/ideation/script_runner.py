@@ -56,5 +56,7 @@ class ScriptRunner:
 
         except subprocess.TimeoutExpired:
             return False, "Script timed out"
-        except Exception as e:
+        except subprocess.SubprocessError as e:
+            return False, str(e)
+        except OSError as e:
             return False, str(e)

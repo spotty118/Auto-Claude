@@ -11,6 +11,7 @@ The validation logic is organized into separate modules:
 - filesystem_validators.py: File system operations (chmod, rm, init.sh)
 - git_validators.py: Git operations (commit with secret scanning)
 - database_validators.py: Database operations (postgres, mysql, redis, mongo)
+- path_validators.py: Path traversal protection for untrusted paths
 - validator_registry.py: Central registry of all validators
 
 For backwards compatibility, all validators and the VALIDATORS registry
@@ -34,6 +35,14 @@ from .filesystem_validators import (
     validate_rm_command,
 )
 from .git_validators import validate_git_commit
+from .path_validators import (
+    DEFAULT_SUBPROCESS_TIMEOUT,
+    GIT_SUBPROCESS_TIMEOUT,
+    PathValidationResult,
+    assert_path_within_base,
+    sanitize_filename,
+    validate_path_within_base,
+)
 from .process_validators import (
     validate_kill_command,
     validate_killall_command,
@@ -47,6 +56,7 @@ __all__ = [
     # Types
     "ValidationResult",
     "ValidatorFunction",
+    "PathValidationResult",
     # Registry
     "VALIDATORS",
     "get_validator",
@@ -60,6 +70,13 @@ __all__ = [
     "validate_init_script",
     # Git validators
     "validate_git_commit",
+    # Path validators
+    "validate_path_within_base",
+    "assert_path_within_base",
+    "sanitize_filename",
+    # Timeouts
+    "DEFAULT_SUBPROCESS_TIMEOUT",
+    "GIT_SUBPROCESS_TIMEOUT",
     # Database validators
     "validate_dropdb_command",
     "validate_dropuser_command",

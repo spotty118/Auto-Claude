@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
+import subprocess
 
 from .timeline_git import TimelineGitHelper
 from .timeline_models import (
@@ -516,7 +517,7 @@ class FileTimelineTracker:
 
             debug_success(MODULE, f"Captured {len(changed_files)} files from worktree")
 
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             logger.error(f"Failed to capture worktree state: {e}")
 
     def initialize_from_worktree(
@@ -591,7 +592,7 @@ class FileTimelineTracker:
                 target_branch=actual_target,
             )
 
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             logger.error(f"Failed to initialize from worktree: {e}")
 
     # =========================================================================

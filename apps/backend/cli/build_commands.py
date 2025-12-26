@@ -306,7 +306,7 @@ def handle_build_command(
             max_iterations=max_iterations,
             verbose=verbose,
         )
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print(f"\nFatal error: {e}")
         if verbose:
             import traceback

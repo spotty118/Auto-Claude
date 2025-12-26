@@ -186,7 +186,7 @@ class SpecOrchestrator:
             if summary:
                 self._phase_summaries[phase_name] = summary
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             # Don't fail the pipeline if summarization fails
             print_status(f"Phase summarization skipped: {e}", "warning")
 
@@ -212,7 +212,7 @@ class SpecOrchestrator:
                 # Regenerate project index
                 analyze_project(self.project_dir, index_file)
                 print_status("Project index updated", "success")
-            except Exception as e:
+            except OSError as e:
                 print_status(f"Project index refresh failed: {e}", "warning")
                 # Don't fail spec creation if indexing fails - continue with cached/missing
         else:

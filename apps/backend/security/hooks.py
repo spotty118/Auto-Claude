@@ -4,9 +4,18 @@ Security Hooks
 
 Pre-tool-use hooks that validate bash commands for security.
 Main enforcement point for the security system.
+
+SECURITY PRINCIPLES:
+- Fail-secure: When security profile loading fails, block ALL commands
+- Defense in depth: Multiple validation layers
+- Explicit allowlisting: Only explicitly allowed commands can execute
 """
 
+from __future__ import annotations
+
+import logging
 import os
+import json
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +24,13 @@ from project_analyzer import BASE_COMMANDS, SecurityProfile, is_command_allowed
 from .parser import extract_commands, get_command_for_validation, split_command_segments
 from .profile import get_security_profile
 from .validator import VALIDATORS
+
+logger = logging.getLogger(__name__)
+
+
+class SecurityProfileLoadError(Exception):
+    """Raised when security profile cannot be loaded safely."""
+    pass
 
 
 async def bash_security_hook(
@@ -30,6 +46,9 @@ async def bash_security_hook(
     2. Checks each command against the project's security profile
     3. Runs additional validation for sensitive commands
     4. Blocks disallowed commands with clear error messages
+
+    SECURITY: This hook implements fail-secure behavior. If the security
+    profile cannot be loaded, ALL commands are blocked to prevent bypass.
 
     Args:
         input_data: Dict containing tool_name and tool_input
@@ -53,14 +72,22 @@ async def bash_security_hook(
         cwd = context.cwd
 
     # Get or create security profile
-    # Note: In actual use, spec_dir would be passed through context
+    # SECURITY: Fail-secure - block ALL commands if profile loading fails
     try:
         profile = get_security_profile(Path(cwd))
-    except Exception as e:
-        # If profile creation fails, fall back to base commands only
-        print(f"Warning: Could not load security profile: {e}")
-        profile = SecurityProfile()
-        profile.base_commands = BASE_COMMANDS.copy()
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        # FAIL-SECURE: Block ALL commands when security system is compromised
+        logger.warning(
+            f"Security profile load failed: {e}. "
+            "Blocking all commands to prevent security bypass."
+        )
+        return {
+            "decision": "block",
+            "reason": (
+                f"Security system unavailable: {e}. "
+                "Cannot validate command. Please check security configuration."
+            ),
+        }
 
     # Extract all commands from the command string
     commands = extract_commands(command)

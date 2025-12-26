@@ -71,7 +71,7 @@ class GraphHintsProvider:
                 "graph_hints", True, [str(self.hints_file)], [], 0
             )
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             debug_error("roadmap_graph", "Graph query failed", error=str(e))
             print_status(f"Graph query failed: {e}", "warning")
             self._save_error_hints(str(e))

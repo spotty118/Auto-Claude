@@ -200,7 +200,11 @@ class ServiceOrchestrator:
                         health_check_url=health_url,
                     )
                 )
-        except Exception:
+        except yaml.YAMLError:
+            # YAML parsing failed
+            pass
+        except (KeyError, TypeError, ValueError):
+            # Invalid structure in compose file
             pass
 
     def _discover_monorepo_services(self) -> None:
@@ -324,7 +328,7 @@ class ServiceOrchestrator:
 
         except subprocess.TimeoutExpired:
             result.errors.append("docker-compose startup timed out")
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             result.errors.append(f"Error starting services: {str(e)}")
 
         return result
@@ -336,11 +340,12 @@ class ServiceOrchestrator:
         for service in self._services:
             if service.startup_command:
                 try:
-                    # Use shlex.split() for safe parsing of shell-like syntax
-                    # shell=False prevents shell injection vulnerabilities
+                    # SECURITY: Use shlex.split() to safely parse command (CWE-78)
+                    # Avoids shell injection by not using shell=True
+                    cmd_args = shlex.split(service.startup_command)
                     proc = subprocess.Popen(
-                        shlex.split(service.startup_command),
-                        shell=False,
+                        cmd_args,
+                        shell=False,  # SECURITY: Never use shell=True with external input
                         cwd=self.project_dir / service.path
                         if service.path
                         else self.project_dir,
@@ -349,7 +354,11 @@ class ServiceOrchestrator:
                     )
                     self._processes[service.name] = proc
                     result.services_started.append(service.name)
-                except Exception as e:
+                except ValueError as e:
+                    # shlex.split() can raise ValueError on malformed input
+                    result.errors.append(f"Invalid command for {service.name}: {str(e)}")
+                    result.services_failed.append(service.name)
+                except (subprocess.SubprocessError, OSError) as e:
                     result.errors.append(f"Failed to start {service.name}: {str(e)}")
                     result.services_failed.append(service.name)
 
@@ -380,7 +389,14 @@ class ServiceOrchestrator:
                     capture_output=True,
                     timeout=60,
                 )
-        except Exception:
+        except subprocess.TimeoutExpired:
+            # Docker compose down timed out - container may still be running
+            pass
+        except subprocess.SubprocessError:
+            # Docker command failed - likely docker not running
+            pass
+        except OSError:
+            # OS-level error (e.g., docker binary not found after initial check)
             pass
 
     def _stop_local_services(self) -> None:
@@ -389,11 +405,27 @@ class ServiceOrchestrator:
             try:
                 proc.terminate()
                 proc.wait(timeout=10)
-            except Exception:
+            except subprocess.TimeoutExpired:
                 try:
                     proc.kill()
-                except Exception:
+                    proc.wait(timeout=5)
+                except (subprocess.TimeoutExpired, OSError):
                     pass
+            except OSError:
+                # Process already terminated
+                pass
+            finally:
+                # BUGFIX: Always close pipes to prevent file descriptor leaks
+                if proc.stdout:
+                    try:
+                        proc.stdout.close()
+                    except OSError:
+                        pass
+                if proc.stderr:
+                    try:
+                        proc.stderr.close()
+                    except OSError:
+                        pass
         self._processes.clear()
 
     def _get_docker_compose_cmd(self) -> list[str] | None:
@@ -407,7 +439,12 @@ class ServiceOrchestrator:
             )
             if proc.returncode == 0:
                 return ["docker", "compose", "-f", str(self._compose_file)]
-        except Exception:
+        except subprocess.TimeoutExpired:
+            pass
+        except subprocess.SubprocessError:
+            pass
+        except OSError:
+            # docker binary not found
             pass
 
         # Try docker-compose v1
@@ -419,7 +456,12 @@ class ServiceOrchestrator:
             )
             if proc.returncode == 0:
                 return ["docker-compose", "-f", str(self._compose_file)]
-        except Exception:
+        except subprocess.TimeoutExpired:
+            pass
+        except subprocess.SubprocessError:
+            pass
+        except OSError:
+            # docker-compose binary not found
             pass
 
         return None
@@ -461,7 +503,9 @@ class ServiceOrchestrator:
                 s.settimeout(1)
                 result = s.connect_ex(("localhost", port))
                 return result == 0
-        except Exception:
+        except socket.error:
+            return False
+        except OSError:
             return False
 
     def to_dict(self) -> dict[str, Any]:

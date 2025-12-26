@@ -84,7 +84,7 @@ def save_session_insights(
         try:
             run_async(save_to_graphiti_async(spec_dir, session_num, session_data))
             logger.info(f"Session {session_num} insights also saved to Graphiti")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             # Don't fail the save if Graphiti fails - file-based is the primary storage
             logger.warning(f"Graphiti save failed (file-based save succeeded): {e}")
 

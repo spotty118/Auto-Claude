@@ -10,6 +10,11 @@ import json
 import subprocess
 from pathlib import Path
 
+# Subprocess timeout constants
+GIT_TIMEOUT_SHORT = 10   # Simple git queries (status, rev-parse)
+GIT_TIMEOUT_MEDIUM = 30  # Diff and show operations
+GIT_TIMEOUT_MERGE = 60   # Merge operations
+
 # Constants for merge limits
 MAX_FILE_LINES_FOR_AI = 5000  # Skip AI for files larger than this
 MAX_PARALLEL_AI_MERGES = 5  # Limit concurrent AI merge operations
@@ -190,24 +195,40 @@ def get_merge_base(project_dir: Path, ref1: str, ref2: str) -> str | None:
 
 def has_uncommitted_changes(project_dir: Path) -> bool:
     """Check if user has unsaved work."""
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-    )
-    return bool(result.stdout.strip())
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SHORT,
+        )
+        return bool(result.stdout.strip())
+    except subprocess.TimeoutExpired:
+        return False
+    except subprocess.SubprocessError:
+        return False
+    except OSError:
+        return False
 
 
 def get_current_branch(project_dir: Path) -> str:
     """Get the current branch name."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SHORT,
+        )
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return ""
+    except subprocess.SubprocessError:
+        return ""
+    except OSError:
+        return ""
 
 
 def get_existing_build_worktree(project_dir: Path, spec_name: str) -> Path | None:
@@ -232,15 +253,23 @@ def get_file_content_from_ref(
     project_dir: Path, ref: str, file_path: str
 ) -> str | None:
     """Get file content from a git ref (branch, commit, etc.)."""
-    result = subprocess.run(
-        ["git", "show", f"{ref}:{file_path}"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        return result.stdout
-    return None
+    try:
+        result = subprocess.run(
+            ["git", "show", f"{ref}:{file_path}"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_MEDIUM,
+        )
+        if result.returncode == 0:
+            return result.stdout
+        return None
+    except subprocess.TimeoutExpired:
+        return None
+    except subprocess.SubprocessError:
+        return None
+    except OSError:
+        return None
 
 
 def get_changed_files_from_branch(
@@ -261,12 +290,20 @@ def get_changed_files_from_branch(
     Returns:
         List of (file_path, status) tuples
     """
-    result = subprocess.run(
-        ["git", "diff", "--name-status", f"{base_branch}...{spec_branch}"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-status", f"{base_branch}...{spec_branch}"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_MEDIUM,
+        )
+    except subprocess.TimeoutExpired:
+        return []
+    except subprocess.SubprocessError:
+        return []
+    except OSError:
+        return []
 
     files = []
     if result.returncode == 0:
@@ -417,7 +454,7 @@ def validate_merged_syntax(
             return True, ""  # Timeout = assume ok
         except FileNotFoundError:
             return True, ""  # No esbuild = skip validation
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             return True, ""  # Other errors = skip validation
 
     # Python validation
@@ -489,6 +526,7 @@ def create_conflict_file_with_git(
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_MERGE,
             )
 
             # Read the merged content
@@ -499,13 +537,17 @@ def create_conflict_file_with_git(
 
             return merged_content, had_conflicts
 
+        except subprocess.TimeoutExpired:
+            return None, False
+        except subprocess.SubprocessError:
+            return None, False
         finally:
             # Cleanup temp files
             Path(main_path).unlink(missing_ok=True)
             Path(wt_path).unlink(missing_ok=True)
             Path(base_path).unlink(missing_ok=True)
 
-    except Exception as e:
+    except OSError:
         return None, False
 
 

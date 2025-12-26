@@ -15,6 +15,21 @@ permissions:
   actions: read
 
 jobs:
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Scan repository for secrets
+        run: |
+          python apps/backend/security/scan_secrets.py --all-files --quiet --include-docs
+
   # Python tests
   test-python:
     runs-on: ubuntu-latest
@@ -42,6 +57,15 @@ jobs:
           uv venv
           uv pip install -r requirements.txt
           uv pip install -r ../../tests/requirements-test.txt
+
+      - name: Audit Python dependencies
+        working-directory: apps/backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/backend
+        run: |
+          source .venv/bin/activate
+          pip install pip-audit
+          pip-audit -r requirements.txt
 
       - name: Run tests
         if: matrix.python-version != '3.12'
@@ -95,6 +119,10 @@ jobs:
       - name: Install dependencies
         working-directory: apps/frontend
         run: npm ci --ignore-scripts
+
+      - name: Audit dependencies
+        working-directory: apps/frontend
+        run: npm audit --audit-level=high
 
       - name: Lint
         working-directory: apps/frontend

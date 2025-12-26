@@ -45,5 +45,7 @@ def run_script(project_dir: Path, script: str, args: list[str]) -> tuple[bool, s
 
     except subprocess.TimeoutExpired:
         return False, "Script timed out"
-    except Exception as e:
+    except subprocess.SubprocessError as e:
+        return False, str(e)
+    except OSError as e:
         return False, str(e)

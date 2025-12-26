@@ -90,7 +90,7 @@ async def test_llm_connection(config: "GraphitiConfig") -> tuple[bool, str]:
         return False, str(e)
     except ProviderError as e:
         return False, str(e)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         return False, f"Failed to create LLM client: {e}"
 
 
@@ -121,7 +121,7 @@ async def test_embedder_connection(config: "GraphitiConfig") -> tuple[bool, str]
         return False, str(e)
     except ProviderError as e:
         return False, str(e)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         return False, f"Failed to create embedder: {e}"
 
 
@@ -159,7 +159,7 @@ async def test_ollama_connection(
                 return False, f"Ollama returned status {response.status}"
         except urllib.error.URLError as e:
             return False, f"Cannot connect to Ollama at {url}: {e.reason}"
-        except Exception as e:
+        except (OSError, TimeoutError) as e:
             return False, f"Ollama connection error: {e}"
 
     # Use aiohttp if available
@@ -180,5 +180,5 @@ async def test_ollama_connection(
         return False, f"Ollama connection timed out at {url}"
     except aiohttp.ClientError as e:
         return False, f"Cannot connect to Ollama at {url}: {e}"
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         return False, f"Ollama connection error: {e}"

@@ -122,8 +122,17 @@ export function refreshIdeationSession(
     thinkingLevel: config.thinkingLevel || featureSettings.thinkingLevel
   };
 
+  console.log('[DEBUG REFRESH] Config received from renderer:', {
+    projectId,
+    enabledTypes: config.enabledTypes,
+    fullConfig: JSON.stringify(config)
+  });
+
   debugLog('[Ideation Handler] Refresh session request:', {
     projectId,
+    enabledTypes: configWithSettings.enabledTypes,
+    incomingEnabledTypes: config.enabledTypes,
+    maxIdeasPerType: configWithSettings.maxIdeasPerType,
     model: configWithSettings.model,
     thinkingLevel: configWithSettings.thinkingLevel
   });

@@ -15,6 +15,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+# Subprocess timeout constants
+GIT_TIMEOUT_SHORT = 10   # Simple git queries
+GIT_TIMEOUT_MEDIUM = 30  # File content retrieval
+
 
 def find_worktree(project_dir: Path, task_id: str) -> Path | None:
     """
@@ -43,11 +47,16 @@ def find_worktree(project_dir: Path, task_id: str) -> Path | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=GIT_TIMEOUT_SHORT,
         )
         for line in result.stdout.split("\n"):
             if line.startswith("worktree ") and task_id in line:
                 return Path(line.split(" ", 1)[1])
+    except subprocess.TimeoutExpired:
+        pass
     except subprocess.CalledProcessError:
+        pass
+    except subprocess.SubprocessError:
         pass
 
     return None
@@ -72,7 +81,12 @@ def get_file_from_branch(project_dir: Path, file_path: str, branch: str) -> str 
             capture_output=True,
             text=True,
             check=True,
+            timeout=GIT_TIMEOUT_MEDIUM,
         )
         return result.stdout
+    except subprocess.TimeoutExpired:
+        return None
     except subprocess.CalledProcessError:
+        return None
+    except subprocess.SubprocessError:
         return None

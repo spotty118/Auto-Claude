@@ -142,6 +142,10 @@ export class AgentQueueManager {
     const args = [ideationRunnerPath, '--project', projectPath];
 
     // Add enabled types as comma-separated list
+    console.log('[DEBUG QUEUE] Ideation types being sent to CLI:', {
+      enabledTypes: config.enabledTypes,
+      typesString: config.enabledTypes.join(',')
+    });
     if (config.enabledTypes.length > 0) {
       args.push('--types', config.enabledTypes.join(','));
     }

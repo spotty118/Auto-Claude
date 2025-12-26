@@ -13,6 +13,9 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+# Timeout for editor operations (1 hour - user is actively editing)
+EDITOR_TIMEOUT = 3600
+
 
 def open_editor_for_input(field_name: str) -> str:
     """Open the user's editor for long-form text input."""
@@ -30,8 +33,8 @@ def open_editor_for_input(field_name: str) -> str:
         editor_cmd = shlex.split(editor)
         editor_cmd.append(temp_path)
 
-        # Open editor
-        result = subprocess.run(editor_cmd)
+        # Open editor with timeout
+        result = subprocess.run(editor_cmd, timeout=EDITOR_TIMEOUT)
 
         if result.returncode != 0:
             return ""
@@ -46,6 +49,10 @@ def open_editor_for_input(field_name: str) -> str:
         ]
         return "\n".join(content_lines).strip()
 
+    except subprocess.TimeoutExpired:
+        return ""
+    except subprocess.SubprocessError:
+        return ""
     finally:
         # Clean up temp file
         try:

@@ -167,7 +167,7 @@ def select_menu(
     while True:
         try:
             key = _getch()
-        except Exception:
+        except (OSError, KeyboardInterrupt):
             # Fallback if getch fails
             return _fallback_menu(title, options, subtitle, allow_quit)
 

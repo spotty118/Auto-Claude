@@ -123,7 +123,7 @@ def create_subtask_tools(spec_dir: Path, project_dir: Path) -> list:
                     }
                 ]
             }
-        except Exception as e:
+        except (OSError, KeyError, TypeError) as e:
             return {
                 "content": [
                     {"type": "text", "text": f"Error updating subtask status: {e}"}

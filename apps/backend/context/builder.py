@@ -36,9 +36,11 @@ class ContextBuilder:
     def _load_project_index(self) -> dict:
         """Load project index from file or create new one (.auto-claude is the installed instance)."""
         index_file = self.project_dir / ".auto-claude" / "project_index.json"
-        if index_file.exists():
+        try:
             with open(index_file) as f:
                 return json.load(f)
+        except (OSError, json.JSONDecodeError):
+            pass
 
         # Try to create one
         from analyzer import analyze_project
@@ -119,7 +121,7 @@ class ContextBuilder:
                     graph_hints = asyncio.run(
                         fetch_graph_hints(task, str(self.project_dir))
                     )
-            except Exception:
+            except (OSError, RuntimeError, ValueError):
                 # Graphiti is optional - fail gracefully
                 graph_hints = []
 

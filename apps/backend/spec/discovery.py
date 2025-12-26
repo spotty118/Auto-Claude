@@ -58,7 +58,9 @@ def run_discovery_script(
 
     except subprocess.TimeoutExpired:
         return False, "Script timed out"
-    except Exception as e:
+    except subprocess.SubprocessError as e:
+        return False, str(e)
+    except OSError as e:
         return False, str(e)
 
 
@@ -129,5 +131,5 @@ def get_project_index_stats(spec_dir: Path) -> dict:
             "file_count": file_count,
             "project_type": index_data.get("project_type", "unknown"),
         }
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}

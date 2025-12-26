@@ -83,8 +83,23 @@ def get_token_from_keychain() -> str | None:
 
         return token
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception):
-        # Silently fail - this is a fallback mechanism
+    except subprocess.TimeoutExpired:
+        # Keychain access timed out - fail silently as this is a fallback
+        return None
+    except json.JSONDecodeError:
+        # Invalid JSON from keychain - credentials corrupted or wrong format
+        return None
+    except (KeyError, TypeError, AttributeError):
+        # Malformed credentials structure - missing expected fields
+        return None
+    except subprocess.SubprocessError:
+        # General subprocess issues (not found, permission denied, etc.)
+        return None
+    except OSError as e:
+        # OS-level errors (file not found, permission issues)
+        # Log for debugging but don't fail the auth flow
+        import sys
+        print(f"Keychain access failed: {e}", file=sys.stderr)
         return None
 
 

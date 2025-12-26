@@ -172,8 +172,11 @@ class ImplementationPlan:
     @classmethod
     def load(cls, path: Path) -> "ImplementationPlan":
         """Load plan from JSON file."""
-        with open(path, encoding="utf-8") as f:
-            return cls.from_dict(json.load(f))
+        try:
+            with open(path, encoding="utf-8") as f:
+                return cls.from_dict(json.load(f))
+        except (OSError, json.JSONDecodeError) as e:
+            raise ValueError(f"Failed to load implementation plan from {path}: {e}") from e
 
     def get_available_phases(self) -> list[Phase]:
         """Get phases whose dependencies are satisfied."""

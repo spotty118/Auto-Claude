@@ -14,11 +14,24 @@ Key Features:
 """
 
 import json
+import os
 import subprocess
+import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Generator
+
+# fcntl is Unix-only - import conditionally for cross-platform support
+if sys.platform != "win32":
+    import fcntl
+else:
+    fcntl = None  # type: ignore
+
+# Subprocess timeout for git operations
+GIT_TIMEOUT = 60
 
 
 class FailureType(Enum):
@@ -102,37 +115,77 @@ class RecoveryManager:
         with open(self.build_commits_file, "w") as f:
             json.dump(initial_data, f, indent=2)
 
-    def _load_attempt_history(self) -> dict:
-        """Load attempt history from JSON file."""
+    @contextmanager
+    def _file_lock(self, filepath: Path) -> Generator[None, None, None]:
+        """
+        Cross-platform file locking context manager.
+        
+        Uses fcntl on Unix and msvcrt.locking on Windows.
+        Prevents race conditions when multiple agents access recovery files.
+        """
+        lock_file = filepath.with_suffix(filepath.suffix + ".lock")
+        lock_fd = None
         try:
-            with open(self.attempt_history_file) as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError):
-            self._init_attempt_history()
-            with open(self.attempt_history_file) as f:
-                return json.load(f)
+            lock_fd = open(lock_file, "a+b")
+            if sys.platform == "win32":
+                import msvcrt
+
+                lock_fd.seek(0, os.SEEK_END)
+                if lock_fd.tell() == 0:
+                    lock_fd.write(b"0")
+                    lock_fd.flush()
+                lock_fd.seek(0)
+                msvcrt.locking(lock_fd.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                # Unix: use fcntl for atomic locking
+                fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            if lock_fd:
+                if sys.platform == "win32":
+                    import msvcrt
+
+                    lock_fd.seek(0)
+                    msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+                lock_fd.close()
+
+    def _load_attempt_history(self) -> dict:
+        """Load attempt history from JSON file with file locking."""
+        with self._file_lock(self.attempt_history_file):
+            try:
+                with open(self.attempt_history_file) as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                self._init_attempt_history()
+                with open(self.attempt_history_file) as f:
+                    return json.load(f)
 
     def _save_attempt_history(self, data: dict) -> None:
-        """Save attempt history to JSON file."""
-        data["metadata"]["last_updated"] = datetime.now().isoformat()
-        with open(self.attempt_history_file, "w") as f:
-            json.dump(data, f, indent=2)
+        """Save attempt history to JSON file with file locking."""
+        with self._file_lock(self.attempt_history_file):
+            data["metadata"]["last_updated"] = datetime.now().isoformat()
+            with open(self.attempt_history_file, "w") as f:
+                json.dump(data, f, indent=2)
 
     def _load_build_commits(self) -> dict:
-        """Load build commits from JSON file."""
-        try:
-            with open(self.build_commits_file) as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError):
-            self._init_build_commits()
-            with open(self.build_commits_file) as f:
-                return json.load(f)
+        """Load build commits from JSON file with file locking."""
+        with self._file_lock(self.build_commits_file):
+            try:
+                with open(self.build_commits_file) as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                self._init_build_commits()
+                with open(self.build_commits_file) as f:
+                    return json.load(f)
 
     def _save_build_commits(self, data: dict) -> None:
-        """Save build commits to JSON file."""
-        data["metadata"]["last_updated"] = datetime.now().isoformat()
-        with open(self.build_commits_file, "w") as f:
-            json.dump(data, f, indent=2)
+        """Save build commits to JSON file with file locking."""
+        with self._file_lock(self.build_commits_file):
+            data["metadata"]["last_updated"] = datetime.now().isoformat()
+            with open(self.build_commits_file, "w") as f:
+                json.dump(data, f, indent=2)
 
     def classify_failure(self, error: str, subtask_id: str) -> FailureType:
         """
@@ -431,10 +484,17 @@ class RecoveryManager:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT,
             )
             return True
+        except subprocess.TimeoutExpired as e:
+            print(f"Timeout rolling back to {commit_hash}: {e}")
+            return False
         except subprocess.CalledProcessError as e:
             print(f"Error rolling back to {commit_hash}: {e.stderr}")
+            return False
+        except subprocess.SubprocessError as e:
+            print(f"Subprocess error rolling back to {commit_hash}: {e}")
             return False
 
     def mark_subtask_stuck(self, subtask_id: str, reason: str) -> None:

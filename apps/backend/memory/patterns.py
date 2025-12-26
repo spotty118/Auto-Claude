@@ -60,7 +60,7 @@ def append_gotcha(spec_dir: Path, gotcha: str) -> None:
                 graphiti = get_graphiti_memory(spec_dir)
                 if graphiti:
                     run_async(graphiti.save_gotcha(gotcha_stripped))
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.warning(f"Graphiti gotcha save failed: {e}")
 
 
@@ -136,7 +136,7 @@ def append_pattern(spec_dir: Path, pattern: str) -> None:
                 graphiti = get_graphiti_memory(spec_dir)
                 if graphiti:
                     run_async(graphiti.save_pattern(pattern_stripped))
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.warning(f"Graphiti pattern save failed: {e}")
 
 

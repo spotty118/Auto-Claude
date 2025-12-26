@@ -56,7 +56,11 @@ def main() -> int:
         print(f"Run: python analyzer.py --project-dir {args.project_dir} --index")
         return 1
 
-    project_index = json.loads(index_path.read_text())
+    try:
+        project_index = json.loads(index_path.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"✗ Error: Failed to parse project index: {e}")
+        return 1
 
     # Import here to avoid import errors if dependencies are missing
     try:

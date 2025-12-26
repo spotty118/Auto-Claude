@@ -330,7 +330,7 @@ def load_subtask_context(
                 else:
                     content = "\n".join(lines)
                 context["patterns"][pattern_path] = content
-            except Exception:
+            except OSError:
                 context["patterns"][pattern_path] = "(Could not read file)"
 
     # Load files to modify (truncated)
@@ -347,7 +347,7 @@ def load_subtask_context(
                 else:
                     content = "\n".join(lines)
                 context["files_to_modify"][file_path] = content
-            except Exception:
+            except OSError:
                 context["files_to_modify"][file_path] = "(Could not read file)"
 
     return context

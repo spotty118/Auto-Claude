@@ -23,9 +23,10 @@ def get_latest_commit(project_dir: Path) -> str | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,  # Prevent hanging on slow/unresponsive git
         )
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
 
@@ -38,9 +39,10 @@ def get_commit_count(project_dir: Path) -> int:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,  # Prevent hanging on slow/unresponsive git
         )
         return int(result.stdout.strip())
-    except (subprocess.CalledProcessError, ValueError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return 0
 
 
@@ -111,6 +113,6 @@ def sync_plan_to_source(spec_dir: Path, source_spec_dir: Path | None) -> bool:
         shutil.copy2(plan_file, source_plan_file)
         logger.debug(f"Synced implementation plan to source: {source_plan_file}")
         return True
-    except Exception as e:
+    except OSError as e:
         logger.warning(f"Failed to sync implementation plan to source: {e}")
         return False

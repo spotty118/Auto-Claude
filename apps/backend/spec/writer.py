@@ -70,5 +70,5 @@ def get_plan_stats(spec_dir: Path) -> dict:
             "total_subtasks": total_subtasks,
             "total_phases": len(plan_data.get("phases", [])),
         }
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {}

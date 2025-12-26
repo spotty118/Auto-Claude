@@ -25,6 +25,7 @@ from .process_validators import (
     validate_killall_command,
     validate_pkill_command,
 )
+from .wrapper_validators import validate_wrapper_command
 from .validation_models import ValidatorFunction
 
 # Map command names to their validation functions
@@ -39,6 +40,15 @@ VALIDATORS: dict[str, ValidatorFunction] = {
     "init.sh": validate_init_script,
     # Git
     "git": validate_git_commit,
+    # Shell wrappers (blocked by default)
+    "sh": validate_wrapper_command,
+    "bash": validate_wrapper_command,
+    "zsh": validate_wrapper_command,
+    "eval": validate_wrapper_command,
+    "exec": validate_wrapper_command,
+    "source": validate_wrapper_command,
+    ".": validate_wrapper_command,
+    "xargs": validate_wrapper_command,
     # Database - PostgreSQL
     "dropdb": validate_dropdb_command,
     "dropuser": validate_dropuser_command,

@@ -11,6 +11,7 @@ import type {
   SecurityHardeningIdea,
   PerformanceOptimizationIdea,
   CodeQualityIdea,
+  BugFinderIdea,
   IdeationStatus,
   IdeationType,
   IdeationSession
@@ -24,7 +25,8 @@ const VALID_IDEATION_TYPES: ReadonlySet<IdeationType> = new Set([
   'documentation_gaps',
   'security_hardening',
   'performance_optimizations',
-  'code_quality'
+  'code_quality',
+  'bug_finder'
 ] as const);
 
 function isValidIdeationType(value: unknown): value is IdeationType {
@@ -162,6 +164,27 @@ export function transformIdeaFromSnakeCase(idea: RawIdea): Idea {
       breakingChange: idea.breaking_change ?? idea.breakingChange ?? false,
       prerequisites: idea.prerequisites || []
     } as CodeQualityIdea;
+  } else if (idea.type === 'bug_finder') {
+    return {
+      id: idea.id,
+      type: 'bug_finder',
+      title: idea.title,
+      description: idea.description,
+      rationale: idea.rationale,
+      status,
+      createdAt,
+      category: idea.category || 'logic_error',
+      severity: idea.severity || 'medium',
+      affectedFiles: idea.affected_files || idea.affectedFiles || [],
+      bugPattern: idea.bug_pattern || idea.bugPattern,
+      triggerCondition: idea.trigger_condition || idea.triggerCondition || '',
+      expectedBehavior: idea.expected_behavior || idea.expectedBehavior || '',
+      actualBehavior: idea.actual_behavior || idea.actualBehavior || '',
+      reproSteps: idea.repro_steps || idea.reproSteps || [],
+      suggestedFix: idea.suggested_fix || idea.suggestedFix || '',
+      confidence: idea.confidence || 'medium',
+      testability: idea.testability
+    } as BugFinderIdea;
   }
 
   // Fallback to base idea (shouldn't happen with proper data)

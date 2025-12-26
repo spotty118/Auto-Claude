@@ -34,6 +34,11 @@ except ImportError:
 logger = logging.getLogger(__name__)
 MODULE = "merge.file_evolution.modification_tracker"
 
+# Subprocess timeout constants
+GIT_TIMEOUT_SHORT = 10   # Simple git queries (rev-parse)
+GIT_TIMEOUT_MEDIUM = 30  # Diff operations
+GIT_TIMEOUT_LONG = 60    # Show operations on large files
+
 
 class ModificationTracker:
     """
@@ -164,6 +169,7 @@ class ModificationTracker:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=GIT_TIMEOUT_MEDIUM,
             )
             changed_files = [f for f in result.stdout.strip().split("\n") if f]
 
@@ -183,6 +189,7 @@ class ModificationTracker:
                     capture_output=True,
                     text=True,
                     check=True,
+                    timeout=GIT_TIMEOUT_MEDIUM,
                 )
 
                 # Get content before (from target branch) and after (current)
@@ -193,8 +200,12 @@ class ModificationTracker:
                         capture_output=True,
                         text=True,
                         check=True,
+                        timeout=GIT_TIMEOUT_LONG,
                     )
                     old_content = show_result.stdout
+                except subprocess.TimeoutExpired:
+                    # File show timed out, treat as empty
+                    old_content = ""
                 except subprocess.CalledProcessError:
                     # File is new
                     old_content = ""
@@ -225,8 +236,12 @@ class ModificationTracker:
                 f"Refreshed {len(changed_files)} files from worktree for task {task_id}"
             )
 
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Git diff timed out: {e}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to refresh from git: {e}")
+        except subprocess.SubprocessError as e:
+            logger.error(f"Subprocess error refreshing from git: {e}")
 
     def mark_task_completed(
         self,
@@ -266,6 +281,7 @@ class ModificationTracker:
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SHORT,
             )
             if result.returncode == 0 and result.stdout.strip():
                 upstream = result.stdout.strip()
@@ -273,7 +289,11 @@ class ModificationTracker:
                 if "/" in upstream:
                     return upstream.split("/", 1)[1]
                 return upstream
+        except subprocess.TimeoutExpired:
+            pass
         except subprocess.CalledProcessError:
+            pass
+        except subprocess.SubprocessError:
             pass
 
         # Try common branch names and find which one has a valid merge-base
@@ -284,10 +304,15 @@ class ModificationTracker:
                     cwd=worktree_path,
                     capture_output=True,
                     text=True,
+                    timeout=GIT_TIMEOUT_SHORT,
                 )
                 if result.returncode == 0:
                     return branch
+            except subprocess.TimeoutExpired:
+                continue
             except subprocess.CalledProcessError:
+                continue
+            except subprocess.SubprocessError:
                 continue
 
         # Default to main

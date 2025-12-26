@@ -115,6 +115,17 @@ if git diff --cached --name-only | grep -q "^apps/backend/.*\.py$"; then
   echo "Backend checks passed!"
 fi
 
+if command -v python >/dev/null 2>&1; then
+  echo "Scanning staged files for secrets..."
+  python apps/backend/security/scan_secrets.py --staged-only --quiet
+  if [ $? -ne 0 ]; then
+    echo "Secrets detected. Commit blocked."
+    exit 1
+  fi
+else
+  echo "Warning: python not found, skipping secrets scan (CI will enforce)."
+fi
+
 # =============================================================================
 # FRONTEND CHECKS (TypeScript/React)
 # =============================================================================

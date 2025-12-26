@@ -207,7 +207,7 @@ class SecurityScanner:
                     )
                 )
 
-        except Exception as e:
+        except OSError as e:
             result.scan_errors.append(f"Secrets scan error: {str(e)}")
 
     def _run_sast_scans(self, project_dir: Path, result: SecurityScanResult) -> None:
@@ -290,7 +290,9 @@ class SecurityScanner:
             result.scan_errors.append("Bandit scan timed out")
         except FileNotFoundError:
             result.scan_errors.append("Bandit not found")
-        except Exception as e:
+        except subprocess.SubprocessError as e:
+            result.scan_errors.append(f"Bandit subprocess error: {str(e)}")
+        except OSError as e:
             result.scan_errors.append(f"Bandit error: {str(e)}")
 
     def _run_dependency_audits(
@@ -356,7 +358,9 @@ class SecurityScanner:
             result.scan_errors.append("npm audit timed out")
         except FileNotFoundError:
             pass  # npm not available
-        except Exception as e:
+        except subprocess.SubprocessError as e:
+            result.scan_errors.append(f"npm audit subprocess error: {str(e)}")
+        except OSError as e:
             result.scan_errors.append(f"npm audit error: {str(e)}")
 
     def _run_pip_audit(self, project_dir: Path, result: SecurityScanResult) -> None:
@@ -395,9 +399,11 @@ class SecurityScanner:
         except FileNotFoundError:
             pass  # pip-audit not available
         except subprocess.TimeoutExpired:
-            pass
-        except Exception:
-            pass
+            result.scan_errors.append("pip-audit timed out")
+        except subprocess.SubprocessError as e:
+            result.scan_errors.append(f"pip-audit subprocess error: {str(e)}")
+        except OSError as e:
+            result.scan_errors.append(f"pip-audit error: {str(e)}")
 
     def _is_python_project(self, project_dir: Path) -> bool:
         """Check if this is a Python project."""

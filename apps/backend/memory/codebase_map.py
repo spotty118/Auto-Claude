@@ -68,7 +68,7 @@ def update_codebase_map(spec_dir: Path, discoveries: dict[str, str]) -> None:
             if graphiti:
                 run_async(graphiti.save_codebase_discoveries(discoveries))
                 logger.info("Codebase discoveries also saved to Graphiti")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Graphiti codebase save failed: {e}")
 
 

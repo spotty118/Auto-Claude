@@ -116,7 +116,7 @@ class PatchedKuzuDriver(OriginalKuzuDriver):
                                 logger.debug(
                                     f"Dropped existing FTS index: {index_name}"
                                 )
-                            except Exception:
+                            except RuntimeError:
                                 # Index might not exist, that's fine
                                 pass
 
@@ -124,7 +124,7 @@ class PatchedKuzuDriver(OriginalKuzuDriver):
                     conn.execute(query)
                     logger.debug(f"Created FTS index: {query[:80]}...")
 
-                except Exception as e:
+                except RuntimeError as e:
                     error_msg = str(e).lower()
                     # Handle "index already exists" gracefully
                     if "already exists" in error_msg or "duplicate" in error_msg:
@@ -153,7 +153,7 @@ class PatchedKuzuDriver(OriginalKuzuDriver):
             try:
                 conn.execute("INSTALL fts")
                 logger.debug("Installed FTS extension")
-            except Exception as e:
+            except RuntimeError as e:
                 error_msg = str(e).lower()
                 if "already" not in error_msg:
                     logger.debug(f"FTS extension install note: {e}")
@@ -162,7 +162,7 @@ class PatchedKuzuDriver(OriginalKuzuDriver):
             try:
                 conn.execute("LOAD EXTENSION fts")
                 logger.debug("Loaded FTS extension")
-            except Exception as e:
+            except RuntimeError as e:
                 error_msg = str(e).lower()
                 if "already loaded" not in error_msg:
                     logger.debug(f"FTS extension load note: {e}")

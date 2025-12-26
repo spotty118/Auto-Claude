@@ -48,6 +48,6 @@ async def fetch_graph_hints(
             max_results=max_results,
         )
         return hints
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         # Graphiti is optional - fail gracefully
         return []

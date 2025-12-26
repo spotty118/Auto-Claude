@@ -130,7 +130,7 @@ def create_qa_tools(spec_dir: Path, project_dir: Path) -> list:
                 ]
             }
 
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, KeyError) as e:
             return {
                 "content": [{"type": "text", "text": f"Error updating QA status: {e}"}]
             }

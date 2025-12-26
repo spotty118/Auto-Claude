@@ -109,7 +109,7 @@ class GraphitiSearch:
             )
             return context_items
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to search context: {e}")
             return []
 
@@ -160,7 +160,7 @@ class GraphitiSearch:
             sessions.sort(key=lambda x: x.get("session_number", 0), reverse=True)
             return sessions[:limit]
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to get session history: {e}")
             return []
 
@@ -210,6 +210,6 @@ class GraphitiSearch:
 
             return outcomes[:limit]
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to get similar task outcomes: {e}")
             return []

@@ -431,7 +431,7 @@ async def run_ai_complexity_assessment(
 
         return None
 
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         return None
 
 

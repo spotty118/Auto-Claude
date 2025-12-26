@@ -162,7 +162,7 @@ async def post_session_processing(
                     f"Extracted {insight_count} file insights, {pattern_count} patterns",
                     "success",
                 )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Insight extraction failed: {e}")
             extracted_insights = None
 
@@ -186,7 +186,7 @@ async def post_session_processing(
                     )
             else:
                 print_status("Failed to save session memory", "warning")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Error saving session memory: {e}")
             print_status("Memory save failed", "warning")
 
@@ -233,7 +233,7 @@ async def post_session_processing(
                 success=False,
                 recovery_manager=recovery_manager,
             )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.debug(f"Insight extraction failed for incomplete session: {e}")
             extracted_insights = None
 
@@ -248,7 +248,7 @@ async def post_session_processing(
                 subtasks_completed=[],
                 discoveries=extracted_insights,
             )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.debug(f"Failed to save incomplete session memory: {e}")
 
         return False
@@ -289,7 +289,7 @@ async def post_session_processing(
                 success=False,
                 recovery_manager=recovery_manager,
             )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.debug(f"Insight extraction failed for failed session: {e}")
             extracted_insights = None
 
@@ -304,7 +304,7 @@ async def post_session_processing(
                 subtasks_completed=[],
                 discoveries=extracted_insights,
             )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.debug(f"Failed to save failed session memory: {e}")
 
         return False
@@ -536,7 +536,7 @@ async def run_agent_session(
         )
         return "continue", response_text
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         debug_error(
             "session",
             f"Session error: {e}",

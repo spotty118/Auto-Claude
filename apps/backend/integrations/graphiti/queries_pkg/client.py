@@ -201,7 +201,7 @@ class GraphitiClient:
             )
             return False
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Failed to initialize Graphiti client: {e}")
             return False
 
@@ -213,7 +213,7 @@ class GraphitiClient:
             try:
                 await self._graphiti.close()
                 logger.info("Graphiti connection closed")
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.warning(f"Error closing Graphiti: {e}")
             finally:
                 self._graphiti = None

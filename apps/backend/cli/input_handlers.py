@@ -165,7 +165,7 @@ def read_from_file() -> str | None:
     except PermissionError:
         print_status(f"Permission denied: cannot read {file_path_input}", "error")
         return None
-    except Exception as e:
+    except OSError as e:
         print_status(f"Error reading file: {e}", "error")
         return None
 

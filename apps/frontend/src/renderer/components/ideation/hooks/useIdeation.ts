@@ -46,6 +46,7 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
   const [pendingAction, setPendingAction] = useState<'generate' | 'refresh' | 'append' | null>(null);
   const [showAddMoreDialog, setShowAddMoreDialog] = useState(false);
   const [typesToAdd, setTypesToAdd] = useState<IdeationType[]>([]);
+  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
 
   const { hasToken, isLoading: isCheckingToken, checkToken } = useClaudeTokenCheck();
 
@@ -66,6 +67,9 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
   };
 
   const handleRefresh = async () => {
+    console.log('[DEBUG handleRefresh] Called with config:', {
+      enabledTypes: config.enabledTypes
+    });
     if (hasToken === false) {
       setPendingAction('refresh');
       setShowEnvConfigModal(true);
@@ -122,11 +126,28 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
   };
 
   const handleConvertToTask = async (idea: Idea) => {
-    const result = await window.electronAPI.convertIdeaToTask(projectId, idea.id);
-    if (result.success && result.data) {
-      // Store the taskId on the idea so we can navigate to it later
-      useIdeationStore.getState().setIdeaTaskId(idea.id, result.data.id);
-      loadTasks(projectId);
+    // Prevent duplicate conversions - if already converting this idea, skip
+    if (convertingIds.has(idea.id)) {
+      return;
+    }
+
+    // Mark as converting to block duplicate clicks
+    setConvertingIds((prev) => new Set(prev).add(idea.id));
+
+    try {
+      const result = await window.electronAPI.convertIdeaToTask(projectId, idea.id);
+      if (result.success && result.data) {
+        // Store the taskId on the idea so we can navigate to it later
+        useIdeationStore.getState().setIdeaTaskId(idea.id, result.data.id);
+        loadTasks(projectId);
+      }
+    } finally {
+      // Remove from converting set when done (success or error)
+      setConvertingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(idea.id);
+        return next;
+      });
     }
   };
 
@@ -151,6 +172,13 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
     const newTypes = currentTypes.includes(type)
       ? currentTypes.filter((t) => t !== type)
       : [...currentTypes, type];
+
+    console.log('[DEBUG toggleIdeationType] Toggle action:', {
+      type,
+      currentTypes,
+      action: currentTypes.includes(type) ? 'removing' : 'adding',
+      newTypes
+    });
 
     if (newTypes.length > 0) {
       setConfig({ enabledTypes: newTypes });
@@ -215,6 +243,7 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
     activeIdeas,
     archivedIdeas,
     selectedIds,
+    convertingIds,
 
     // Actions
     setSelectedIdea,

@@ -111,7 +111,7 @@ class RequirementsPhaseMixin:
 
             return PhaseResult("historical_context", True, [str(hints_file)], [], 0)
 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             self.ui.print_status(f"Graph query failed: {e}", "warning")
             validator.create_empty_hints(
                 self.spec_dir,

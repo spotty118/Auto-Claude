@@ -82,7 +82,7 @@ Be concise and use bullet points. Skip boilerplate and meta-commentary.
                         if hasattr(block, "text"):
                             response_text += block.text
             return response_text.strip()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         # Fallback: return truncated raw output on error
         # This ensures we don't block the pipeline if summarization fails
         fallback = phase_output[:2000]
@@ -150,7 +150,7 @@ def gather_phase_outputs(spec_dir: Path, phase_name: str) -> str:
                 if len(content) > 10000:
                     content = content[:10000] + "\n\n[... file truncated ...]"
                 outputs.append(f"**{filename}**:\n```\n{content}\n```")
-            except Exception:
+            except OSError:
                 pass  # Skip files that can't be read
 
     return "\n\n".join(outputs) if outputs else ""
