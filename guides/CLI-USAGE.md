@@ -83,7 +83,7 @@ python spec_runner.py --task "Add user authentication with OAuth"
 python spec_runner.py --task "Fix button color" --complexity simple
 
 # Continue an interrupted spec
-python spec_runner.py --continue 001-feature
+python spec_runner.py --continue 001-my-feature
 ```
 
 ### Complexity Tiers
@@ -104,7 +104,7 @@ python run.py --list
 
 # Run a specific spec
 python run.py --spec 001
-python run.py --spec 001-feature-name
+python run.py --spec 001-my-feature
 
 # Limit iterations for testing
 python run.py --spec 001 --max-iterations 5
@@ -137,7 +137,7 @@ Auto Claude uses Git worktrees for isolated builds:
 
 ```bash
 # Test the feature in the isolated workspace
-cd .worktrees/auto-claude/
+cd .worktrees/001-my-feature/
 npm run dev  # or your project's run command
 
 # Return to backend directory to run management commands
@@ -168,16 +168,16 @@ Ctrl+C (twice)
 **File-based alternative:**
 ```bash
 # Create PAUSE file to pause after current session
-touch specs/001-name/PAUSE
+touch specs/001-my-feature/PAUSE
 
 # Add instructions
-echo "Focus on fixing the login bug first" > specs/001-name/HUMAN_INPUT.md
+echo "Focus on fixing the login bug first" > specs/001-my-feature/HUMAN_INPUT.md
 ```
 
 ## Spec Validation
 
 ```bash
-python validate_spec.py --spec-dir specs/001-feature --checkpoint all
+python validate_spec.py --spec-dir specs/001-my-feature --checkpoint all
 ```
 
 ## Environment Variables
