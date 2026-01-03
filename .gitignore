@@ -164,3 +164,11 @@ _bmad-output/
 /docs
 OPUS_ANALYSIS_AND_IDEAS.md
 /.github/agents
+
+# ===========================
+# Spec-Driven Engineering (Meta Layer)
+# ===========================
+# These are coordination tools for AI agents, not part of the product
+# .specs/ is the active working layer - kept accessible
+.spec-kit/
+# Note: CONTEXT_MAP.md, PROJECT_SPEC.md, SPEC_ARCHITECTURE.md now accessible for AI analysis
